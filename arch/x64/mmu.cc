@@ -75,4 +75,75 @@ void flush_tlb_all()
     tlb_flush_waiter.clear();
 }
 
+static pt_element page_table_root;
+
+void switch_to_runtime_page_tables()
+{
+    processor::write_cr3(page_table_root.next_pt_addr());
+}
+
+pt_element *get_root_pt(uintptr_t virt __attribute__((unused))) {
+    return &page_table_root;
+}
+
+bool hw_ptep::change_perm(unsigned int perm)
+{
+    arch_pt_element pte = static_cast<arch_pt_element>(this->read());
+    unsigned int old = (pte.valid() ? perm_read : 0) |
+        (pte.writable() ? perm_write : 0) |
+        (!pte.nx() ? perm_exec : 0);
+    // Note: in x86, if the present bit (0x1) is off, not only read is
+    // disallowed, but also write and exec. So in mprotect, if any
+    // permission is requested, we must also grant read permission.
+    // Linux does this too.
+    pte.set_valid(perm);
+    pte.set_writable(perm & perm_write);
+    pte.set_nx(!(perm & perm_exec));
+    this->write(pte);
+
+    return old & ~perm;
+}
+
+pt_element make_empty_pte() { return arch_pt_element(); }
+
+pt_element make_pte(phys addr, bool large, unsigned perm)
+{
+    arch_pt_element pte;
+    pte.set_valid(perm != 0);
+    pte.set_writable(perm & perm_write);
+    pte.set_user(true);
+    pte.set_accessed(true);
+    pte.set_dirty(true);
+    pte.set_large(large);
+    pte.set_addr(addr, large);
+    pte.set_nx(!(perm & perm_exec));
+    return pte;
+}
+
+pt_element make_normal_pte(phys addr, unsigned perm)
+{
+    return make_pte(addr, false, perm);
+}
+
+pt_element make_large_pte(phys addr, unsigned perm)
+{
+    return make_pte(addr, true, perm);
+}
+
+enum {
+    page_fault_prot  = 1ul << 0,
+    page_fault_write = 1ul << 1,
+    page_fault_user  = 1ul << 2,
+    page_fault_rsvd  = 1ul << 3,
+    page_fault_insn  = 1ul << 4,
+};
+
+bool is_page_fault_insn(unsigned int error_code) {
+    return error_code & page_fault_insn;
+}
+
+bool is_page_fault_write(unsigned int error_code) {
+    return error_code & page_fault_write;
+}
+
 }
