@@ -228,17 +228,14 @@ void file::load_program_headers()
     }
 }
 
-#ifndef AARCH64_PORT_STUB
 namespace {
 
 ulong page_size = 4096;
 
 }
-#endif /* !AARCH64_PORT_STUB */
 
 void file::load_segment(const Elf64_Phdr& phdr)
 {
-#ifndef AARCH64_PORT_STUB
     ulong vstart = align_down(phdr.p_vaddr, page_size);
     ulong filesz_unaligned = phdr.p_vaddr + phdr.p_filesz - vstart;
     ulong filesz = align_up(filesz_unaligned, page_size);
@@ -247,9 +244,6 @@ void file::load_segment(const Elf64_Phdr& phdr)
                   _f, align_down(phdr.p_offset, page_size));
     memset(_base + vstart + filesz_unaligned, 0, filesz - filesz_unaligned);
     mmu::map_anon(_base + vstart + filesz, memsz - filesz, mmu::mmap_fixed, mmu::perm_rwx);
-#else /* AARCH64_PORT_STUB */
-    abort();
-#endif /* AARCH64_PORT_STUB */
 }
 
 void object::load_segments()
@@ -287,16 +281,12 @@ void object::load_segments()
 
 void file::unload_segment(const Elf64_Phdr& phdr)
 {
-#ifndef AARCH64_PORT_STUB
     ulong vstart = align_down(phdr.p_vaddr, page_size);
     ulong filesz_unaligned = phdr.p_vaddr + phdr.p_filesz - vstart;
     ulong filesz = align_up(filesz_unaligned, page_size);
     ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz, page_size) - vstart;
     mmu::munmap(_base + vstart, filesz);
     mmu::munmap(_base + vstart + filesz, memsz - filesz);
-#else /* AARCH64_PORT_STUB */
-    abort();
-#endif
 }
 
 void object::unload_segments()
@@ -400,9 +390,6 @@ symbol_module object::symbol(unsigned idx)
 
 void object::relocate_rela()
 {
-#ifdef AARCH64_PORT_STUB
-    abort();
-#endif
     auto rela = dynamic_ptr<Elf64_Rela>(DT_RELA);
     assert(dynamic_val(DT_RELAENT) == sizeof(Elf64_Rela));
     unsigned nb = dynamic_val(DT_RELASZ) / sizeof(Elf64_Rela);
