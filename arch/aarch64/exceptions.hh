@@ -46,6 +46,8 @@ struct interrupt_desc {
 class interrupt_table {
 public:
     interrupt_table();
+    void enable_irqs();
+
     void register_handler(int id, interrupt_handler handler);
     void invoke_interrupt(int id);
 

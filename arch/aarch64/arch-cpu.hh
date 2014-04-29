@@ -13,7 +13,7 @@
 #include "processor.hh"
 #include "osv/pagealloc.hh"
 #include <osv/debug.h>
-#include "gic.hh"
+#include "exceptions.hh"
 
 namespace sched {
 
@@ -39,6 +39,8 @@ inline void arch_cpu::init_on_cpu()
     if (this->smp_idx != 0) {
         gic::gic_driver->init_cpu(this->smp_idx);
     }
+
+    interrupt_table.enable_irqs();
 }
 
 }

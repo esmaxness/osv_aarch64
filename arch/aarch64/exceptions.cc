@@ -29,6 +29,19 @@ interrupt_table::interrupt_table() {
     debug_early("returning from interrupt_table::interrupt_table()\n");
 }
 
+void interrupt_table::enable_irqs()
+{
+    int i;
+    for (i = 0; i < this->nr_irqs; i++) {
+        struct interrupt_desc *desc = &this->irq_desc[i];
+        if (desc->handler) {
+            debug_early_u64("enabling InterruptID=", desc->id);
+            gic::gic_driver->set_irq_type(desc->id, gic::irq_type::IRQ_TYPE_EDGE);
+            gic::gic_driver->unmask_irq(desc->id);
+        }
+    }
+}
+
 void interrupt_table::register_handler(int i, interrupt_handler h)
 {
     WITH_LOCK(_lock) {
@@ -57,4 +70,24 @@ void interrupt_table::invoke_interrupt(int id)
 
         desc->handler(desc);
     }
+}
+
+extern "C" { void interrupt(exception_frame* frame); }
+
+void interrupt(exception_frame* frame)
+{
+    // Rather that force the exception frame down the call stack,
+    // remember it in a global here.  This works because our interrupts
+    // don't nest.
+    current_interrupt_frame = frame;
+    debug_early("interrupt() reached.\n");
+    asm volatile ("1: wfi; b 1b;");
+    /*
+    unsigned vector = frame->error_code;
+    idt.invoke_interrupt(vector);
+    // must call scheduler after EOI, or it may switch contexts and miss the EOI
+    current_interrupt_frame = nullptr;
+    // FIXME: layering violation
+    sched::preempt();
+    */
 }
