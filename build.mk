@@ -654,6 +654,7 @@ drivers += drivers/clock.o
 drivers += drivers/clockevent.o
 drivers += drivers/ramdisk.o
 drivers += core/elf.o
+drivers += drivers/zfs.o
 drivers += java/jvm_balloon.o
 
 ifeq ($(arch),x64)
@@ -683,7 +684,6 @@ drivers += drivers/ide.o
 drivers += drivers/pci.o
 drivers += drivers/scsi-common.o
 drivers += drivers/vmw-pvscsi.o
-drivers += drivers/zfs.o
 drivers += java/java_api.o
 endif # x64
 
