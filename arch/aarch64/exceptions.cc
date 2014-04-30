@@ -7,6 +7,8 @@
 
 #include <osv/debug.hh>
 #include <osv/prio.hh>
+#include <osv/sched.hh>
+
 #include "exceptions.hh"
 #include "gic.hh"
 
@@ -36,7 +38,8 @@ void interrupt_table::enable_irqs()
         struct interrupt_desc *desc = &this->irq_desc[i];
         if (desc->handler) {
             debug_early_u64("enabling InterruptID=", desc->id);
-            gic::gic_driver->set_irq_type(desc->id, gic::irq_type::IRQ_TYPE_EDGE);
+            gic::gic_driver->set_irq_type(desc->id,
+                                          gic::irq_type::IRQ_TYPE_EDGE);
             gic::gic_driver->unmask_irq(desc->id);
         }
     }
@@ -58,17 +61,18 @@ void interrupt_table::register_handler(int i, interrupt_handler h)
     }
 }
 
-void interrupt_table::invoke_interrupt(int id)
+int interrupt_table::invoke_interrupt(int id)
 {
     WITH_LOCK(osv::rcu_read_lock) {
         assert(id < this->nr_irqs);
         struct interrupt_desc *desc = &this->irq_desc[id];
 
         if (!desc->handler) {
-            return;
+            return 0;
         }
 
         desc->handler(desc);
+        return 1;
     }
 }
 
@@ -76,18 +80,23 @@ extern "C" { void interrupt(exception_frame* frame); }
 
 void interrupt(exception_frame* frame)
 {
-    // Rather that force the exception frame down the call stack,
-    // remember it in a global here.  This works because our interrupts
-    // don't nest.
+    /* remember frame in a global, need to change if going to nested */
     current_interrupt_frame = frame;
-    debug_early("interrupt() reached.\n");
-    asm volatile ("1: wfi; b 1b;");
-    /*
-    unsigned vector = frame->error_code;
-    idt.invoke_interrupt(vector);
-    // must call scheduler after EOI, or it may switch contexts and miss the EOI
+
+    unsigned int iar = gic::gic_driver->ack_irq();
+    int irq = iar & 0x3ff;
+
+    /* note that special values 1022 and 1023 are used for
+       group 1 and spurious interrupts respectively. */
+    if (irq >= gic::gic_driver->nr_irqs) {
+        printf("special InterruptID %x detected!\n");
+
+    } else {
+        if (!interrupt_table.invoke_interrupt(irq))
+            printf("unhandled InterruptID %x!\n", irq);
+        gic::gic_driver->end_irq(iar);
+    }
+
     current_interrupt_frame = nullptr;
-    // FIXME: layering violation
     sched::preempt();
-    */
 }
