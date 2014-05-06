@@ -1,5 +1,6 @@
 #include <osv/mmu.hh>
 #include <osv/debug.h>
+#include <osv/prio.hh>
 
 namespace mmu {
 
