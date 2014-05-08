@@ -118,20 +118,14 @@ int main(int ac, char **av)
         printf("argv[%d] = %s\n", i, av[i]);
     }
 
-    printf("OSv AArch64: main reached, halting.\n");
-    while (1) {
-        asm ("wfi;");
-    }
-#endif /* AARCH64_PORT_STUB */
+    printf("OSv AArch64: main reached.\n");
+#endif /* !AARCH64_PORT_STUB */
 
-#ifndef AARCH64_PORT_STUB
     smp_initial_find_current_cpu()->init_on_cpu();
     void main_cont(int ac, char** av);
     sched::init([=] { main_cont(ac, av); });
-#endif /* !AARCH64_PORT_STUB */
 }
 
-#ifndef AARCH64_PORT_STUB
 static bool opt_leak = false;
 static bool opt_noshutdown = false;
 static bool opt_log_backtrace = false;
@@ -322,6 +316,10 @@ void *_run_main(void *data)
 
 void* do_main_thread(void *_commands)
 {
+    debug_early_entry("do_main_thread");
+    abort("halting in do_main_thread.\n");
+
+#ifndef AARCH64_PORT_STUB
     auto commands =
          static_cast<std::vector<std::vector<std::string> > *>(_commands);
 
@@ -406,16 +404,23 @@ void* do_main_thread(void *_commands)
         pthread_join(t, &retval);
     }
 
+#endif /* !AARCH64_PORT_STUB */
     return nullptr;
 }
 
 void main_cont(int ac, char** av)
 {
+    debug_early_entry("main_cont");
+
     new elf::program();
     elf::get_program()->set_search_path({"/", "/usr/lib"});
     std::vector<std::vector<std::string> > cmds;
 
     std::tie(ac, av) = parse_options(ac, av);
+
+    abort("halting in main_cont.\n");
+
+#ifndef AARCH64_PORT_STUB
     // multiple programs can be run -> separate their arguments
     cmds = prepare_commands(ac, av);
     ioapic::init();
@@ -477,9 +482,8 @@ void main_cont(int ac, char** av)
     } else {
         osv::shutdown();
     }
-}
-
 #endif /* !AARCH64_PORT_STUB */
+}
 
 int __argc;
 char** __argv;
