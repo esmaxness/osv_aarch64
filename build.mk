@@ -1003,11 +1003,11 @@ bare.img: scripts/mkzfs.py $(jni) bare.raw bootfs.manifest
 	$(call quiet, echo Creating $@ as $(img_format))
 	$(call quiet, qemu-img convert -f raw -O $(img_format) bare.raw $@)
 	$(call quiet, qemu-img resize $@ +$(fs_size_mb)M > /dev/null 2>&1)
-	$(src)/scripts/mkzfs.py -o $@ -d $@.d -m bootfs.manifest
+	sudo $(src)/scripts/mkzfs.py -o $@ -d $@.d -m bootfs.manifest
 
 usr.img: bare.img usr.manifest cmdline
 	$(call quiet, cp bare.img $@)
-	$(src)/scripts/upload_manifest.py -o $@ -m usr.manifest \
+	sudo $(src)/scripts/upload_manifest.py -o $@ -m usr.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase)
 	$(call quiet, $(src)/scripts/imgedit.py setargs $@ '$(shell cat cmdline)', IMGEDIT $@)
