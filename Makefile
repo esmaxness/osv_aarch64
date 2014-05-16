@@ -55,7 +55,7 @@ clean: clean-core
 check: export image ?= tests
 
 check: all
-	./scripts/test.py
+	sudo ./scripts/test.py
 
 osv.vmdk osv.vdi:
 	$(MAKE) -r -C $(dir $(submake)) $@
