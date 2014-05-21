@@ -343,7 +343,7 @@ tools += tools/cpiod/cpiod.so
 
 ifeq ($(arch),aarch64)
 tools += tests/tst-hello.so
-cmdline = tests/tst-hello.so
+cmdline = --nomount tests/tst-hello.so
 endif
 
 ifeq ($(arch),x64)
