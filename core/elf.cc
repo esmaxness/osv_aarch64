@@ -481,7 +481,9 @@ void object::relocate_rela()
         u32 type = info & 0xffffffff;
         void *addr = _base + p->r_offset;
         auto addend = p->r_addend;
+
         switch (type) {
+#ifdef __x86_64__
         case R_X86_64_NONE:
             break;
         case R_X86_64_64:
@@ -507,6 +509,27 @@ void object::relocate_rela()
         case R_X86_64_TPOFF64:
             *static_cast<u64*>(addr) = symbol(sym).symbol->st_value - get_tls_size();
             break;
+#endif /* __x86_64__ */
+
+#ifdef __aarch64__
+        case R_AARCH64_NONE:
+        case R_AARCH64_NONE2:
+            break;
+        case R_AARCH64_COPY:
+            abort();
+            break;
+        case R_AARCH64_GLOB_DAT:
+        case R_AARCH64_JUMP_SLOT:
+            *static_cast<void**>(addr) = symbol(sym).relocated_addr() + addend;
+            break;
+        case R_AARCH64_RELATIVE:
+            *static_cast<void**>(addr) = _base + addend;
+            break;
+        case R_AARCH64_TLS_TPREL64:
+            *static_cast<void**>(addr) = symbol(sym).relocated_addr() + addend;
+            break;
+#endif /* __aarch64__ */
+
         default:
             debug("unknown relocation type %d\n", type);
             abort();
@@ -518,6 +541,9 @@ extern "C" { void __elf_resolve_pltgot(void); }
 
 void object::relocate_pltgot()
 {
+#ifdef AARCH64_PORT_STUB
+    bool bind_now = true;
+#else
     auto pltgot = dynamic_ptr<void*>(DT_PLTGOT);
     void *original_plt = nullptr;
     if (pltgot[1]) {
@@ -528,19 +554,34 @@ void object::relocate_pltgot()
         original_plt = static_cast<void*>(_base + (u64)pltgot[1]);
     }
     bool bind_now = dynamic_exists(DT_BIND_NOW);
+#endif /* !AARCH64_PORT_STUB */
 
     auto rel = dynamic_ptr<Elf64_Rela>(DT_JMPREL);
     auto nrel = dynamic_val(DT_PLTRELSZ) / sizeof(*rel);
     for (auto p = rel; p < rel + nrel; ++p) {
         auto info = p->r_info;
         u32 type = info & 0xffffffff;
+
+#ifdef __x86_64__
         assert(type == R_X86_64_JUMP_SLOT);
+#endif /* __x86_64__ */
+#ifdef __aarch64__
+        assert(type == R_AARCH64_JUMP_SLOT);
+#endif /* __aarch64__ */
+
         void *addr = _base + p->r_offset;
         if (bind_now) {
             // If on-load binding is requested (instead of the default lazy
             // binding), resolve all the PLT entries now.
             u32 idx = info >> 32;
+#ifdef __aarch64__
+            *static_cast<void**>(addr) = symbol(idx).relocated_addr() + p->r_addend;
+#endif /* __aarch64__ */
+#ifdef __x86_64__
             *static_cast<void**>(addr) = symbol(idx).relocated_addr();
+#endif /* __x86_64__ */
+
+#ifndef AARCH64_PORT_STUB
         } else if (original_plt) {
             // Restore the link to the original plt.
             // We know the JUMP_SLOT entries are in plt order, and that
@@ -550,13 +591,17 @@ void object::relocate_pltgot()
             // The JUMP_SLOT entry already points back to the PLT, just
             // make sure it is relocated relative to the object base.
             *static_cast<u64*>(addr) += reinterpret_cast<u64>(_base);
+#endif /* !AARCH64_PORT_STUB */
         }
     }
+
+#ifndef AARCH64_PORT_STUB
     // PLTGOT resolution has a special calling convention, with the symbol
     // index and some word pushed on the stack, so we need an assembly
     // stub to convert it back to the standard calling convention.
     pltgot[1] = this;
     pltgot[2] = reinterpret_cast<void*>(__elf_resolve_pltgot);
+#endif /* !AARCH64_PORT_STUB */
 }
 
 void* object::resolve_pltgot(unsigned index)
@@ -566,9 +611,17 @@ void* object::resolve_pltgot(unsigned index)
     auto info = slot.r_info;
     u32 sym = info >> 32;
     u32 type = info & 0xffffffff;
-    assert(type == R_X86_64_JUMP_SLOT);
     void *addr = _base + slot.r_offset;
+
+#ifdef __x86_64__
+    assert(type == R_X86_64_JUMP_SLOT);
     auto ret = *static_cast<void**>(addr) = symbol(sym).relocated_addr();
+#endif /* __x86_64__ */
+#ifdef __aarch64__
+    assert(type == R_AARCH64_JUMP_SLOT);
+    auto ret = *static_cast<void**>(addr) = symbol(sym).relocated_addr() + slot.r_addend;
+#endif /* __aarch64__ */
+
     return ret;
 }
 
