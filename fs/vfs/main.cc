@@ -1990,11 +1990,15 @@ extern char bootfs_start;
 
 void unpack_bootfs(void)
 {
+    debug_early_entry("unpack_bootfs");
+
     struct bootfs_metadata *md = (struct bootfs_metadata *)&bootfs_start;
     int fd, i;
 
     for (i = 0; md[i].name[0]; i++) {
         int ret;
+
+        printf("unpacking %s\n", md[i].name);
 
         // mkdir() directories needed for this path name, as necessary
         char tmp[BOOTFS_PATH_MAX];
