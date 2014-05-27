@@ -465,7 +465,13 @@ symbol_module object::symbol(unsigned idx)
         return symbol_module(sym, this);
     }
     if (!ret.symbol) {
-        abort("Failed looking up symbol %s\n", demangle(name).c_str());
+        debug_ll("Failed looking up symbol %s\n", demangle(name).c_str());
+#ifdef AARCH64_PORT_STUB
+        debug_early("using workaround, consider as if weak.\n");
+        return symbol_module(sym, this);
+#else
+        abort();
+#endif
     }
     return ret;
 }
@@ -515,6 +521,9 @@ void object::relocate_rela()
         case R_AARCH64_NONE:
         case R_AARCH64_NONE2:
             break;
+        case R_AARCH64_ABS64:
+            *static_cast<void**>(addr) = symbol(sym).relocated_addr() + addend;
+            break;
         case R_AARCH64_COPY:
             abort();
             break;
@@ -531,7 +540,7 @@ void object::relocate_rela()
 #endif /* __aarch64__ */
 
         default:
-            debug("unknown relocation type %d\n", type);
+            debug_early_u64("relocate_rela: unknown relocation type ", (u64)type);
             abort();
         }
     }
@@ -1256,7 +1265,7 @@ init_table get_init(Elf64_Ehdr* header)
                         break;
 #endif /* __aarch64__ */
                     default:
-                        debug_early_u64("Unsupported relocation type=", (u64)type);
+                        debug_early_u64("get_init: unsupported relocation type ", (u64)type);
                         abort();
                     }
 
