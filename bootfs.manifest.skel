@@ -6,3 +6,4 @@
 /tools/mkfs.so: tools/mkfs/mkfs.so
 /tools/cpiod.so: tools/cpiod/cpiod.so
 /tests/tst-hello.so: tests/tst-hello.so
+/tests/tst-sigwait.so: tests/tst-sigwait.so
