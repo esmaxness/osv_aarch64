@@ -9,6 +9,14 @@ extern "C" {
 #define __NEED_struct_timespec
 #define __NEED_pid_t
 #define __NEED_time_t
+#define __NEED_size_t
+
+/* It is convenient to expose these values here instead
+ * of calling the sched_get_priority_min/max functions
+ * each time.
+ */
+#define SCHED_PRIO_MIN 1
+#define SCHED_PRIO_MAX 99
 
 #include <bits/alltypes.h>
 
