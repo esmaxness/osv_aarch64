@@ -791,18 +791,6 @@ void pthread_exit(void *retval)
     t->_thread.exit();
 }
 
-int sched_get_priority_max(int policy)
-{
-    WARN_STUBBED();
-    return EINVAL;
-}
-
-int sched_get_priority_min(int policy)
-{
-    WARN_STUBBED();
-    return EINVAL;
-}
-
 int pthread_setschedparam(pthread_t thread, int policy,
         const struct sched_param *param)
 {

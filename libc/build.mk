@@ -683,3 +683,5 @@ libc += eventfd.o
 libc += timerfd.o
 libc += shm.o
 libc += inotify.o
+
+libc += rt/sched.o

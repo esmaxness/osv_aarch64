@@ -550,6 +550,24 @@ void thread::yield()
     t->_detached_state->_cpu->reschedule_from_interrupt();
 }
 
+void thread::set_realtime(int policy, int priority,
+                          thread_realtime::duration time_slice)
+{
+    switch (policy) {
+    case SCHED_OTHER:
+        _realtime._priority = 0;
+        break;
+    case SCHED_FIFO:
+        time_slice = thread_realtime::duration(-1);
+    case SCHED_RR:
+        _realtime._priority = priority;
+        _realtime._time_slice = time_slice;
+        break;
+    default:
+        assert(0);
+    }
+}
+
 void thread::set_priority(float priority)
 {
     _runtime.set_priority(priority);
