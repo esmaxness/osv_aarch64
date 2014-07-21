@@ -139,6 +139,30 @@ void priority_test(std::vector<float> ps)
 }
 #endif
 
+#ifdef __OSV__
+void realtime_test(std::vector<int> ps)
+{
+    std::cerr << "Starting realtime test\n";
+    std::vector<std::thread> threads;
+    mutex mtx;
+    for (auto p : ps) {
+        threads.push_back(std::thread([p]() {
+            sched::thread::current()->set_realtime(p);
+            std::cout << "Starting thread with realtime priority " << p << "\n";
+            // Sleep a bit, to let all test threads get started. The thread
+            // starting the test threads is not realtime, so it can be preempted
+            // by the test threads.
+            sleep(1);
+            _loop(1000000);
+            std::cout << "Ended thread with realtime priority " << p << "\n";
+        }));
+    }
+    for (auto &t : threads) {
+        t.join();
+    }
+    std::cerr << "Realtime test done\n";
+}
+#endif
 
 int main()
 {
