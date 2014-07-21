@@ -279,7 +279,12 @@ void cpu::reschedule_from_interrupt()
             return;
         } else {
             auto &t = *runqueue.begin();
-            if (p->_runtime.get_local() < t._runtime.get_local()) {
+            if (p->_realtime._priority > 0) {
+                // only switch to a higher-realtime-priority thread.
+                if (t._realtime._priority <= p->_realtime._priority) {
+                    return;
+                }
+            } else if (p->_runtime.get_local() < t._runtime.get_local()) {
                 preemption_timer.cancel();
                 auto delta = p->_runtime.time_until(t._runtime.get_local());
                 if (delta > 0) {
@@ -315,7 +320,7 @@ void cpu::reschedule_from_interrupt()
         n->_runtime.add_context_switch_penalty();
     }
     preemption_timer.cancel();
-    if (!runqueue.empty()) {
+    if (n->_realtime._priority == 0 && !runqueue.empty()) {
         auto& t = *runqueue.begin();
         auto delta = n->_runtime.time_until(t._runtime.get_local());
         if (delta > 0) {

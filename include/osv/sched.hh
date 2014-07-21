@@ -301,6 +301,28 @@ private:
     // (i.e., export_runtime() was called, or this is a new thread).
     int _renormalize_count;
 };
+// Normal threads are fairly time-shared according using the thread_runtime
+// data above. Such normal threads all have _realtime._priority == 0.
+// A real-time thread is one where _realtime._priority > 0. The scheduler
+// always picks the thread with the highest _realtime_priority to run next;
+// In particular normal threads run only when no real-time thread wants to
+// run. When several real-time threads with equal _realtime._priority want to
+// run, each one is run for _realtime._time_slice before switching to the
+// next one; If _realtime_time_slice is < 0, there is no limit on the amount
+// of time the thread will run - it will only be preempted when it waits,
+// yields, or a higher-priority thread comes along. If
+// _realtime._time_slice==0 the system-default _realtime_time_slice is used.
+// The realtime scheduling policy matches the POSIX SCHED_RR/SCHED_FIFO
+class thread_realtime {
+public:
+    using duration = thread_runtime::duration;
+    unsigned _priority = 0;
+    duration _time_slice = duration::zero();
+    int policy() {
+        return _priority == 0 ? SCHED_OTHER
+            : _time_slice < 0 ? SCHED_FIFO : SCHED_RR;
+    }
+};
 
 /**
  * OSv thread
@@ -465,6 +487,14 @@ public:
      * explained in set_priority().
      */
     float priority() const;
+    void set_realtime(int priority, thread_realtime::duration time_slice =
+            thread_realtime::duration::zero()) {
+        _realtime._priority = priority;
+        _realtime._time_slice = time_slice;
+    }
+    class thread_realtime get_realtime() {
+        return _realtime;
+    }
 private:
     static void wake_impl(detached_state* st,
             unsigned allowed_initial_states_mask = 1 << unsigned(status::waiting));
@@ -553,6 +583,7 @@ private:
         terminated,
     };
     thread_runtime _runtime;
+    thread_realtime _realtime;
     // part of the thread state is detached from the thread structure,
     // and freed by rcu, so that waking a thread and destroying it can
     // occur in parallel without synchronization via thread_handle
@@ -670,7 +701,12 @@ osv::clock::uptime::duration process_cputime();
 class thread_runtime_compare {
 public:
     bool operator()(const thread& t1, const thread& t2) const {
-        return t1._runtime.get_local() < t2._runtime.get_local();
+        if (t1._realtime._priority > t2._realtime._priority)
+            return true;
+        else if (t2._realtime._priority > 0)
+            return false;
+        else
+            return t1._runtime.get_local() < t2._runtime.get_local();
     }
 };
 
