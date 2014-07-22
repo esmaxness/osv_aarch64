@@ -14,7 +14,7 @@
 
 namespace osv {
 
-static const unsigned nsignals = 64;
+static const int nsignals = 64;
 
 struct sigset {
     std::bitset<nsignals> mask;
@@ -25,7 +25,8 @@ extern struct sigaction signal_actions[nsignals];
 sigset* from_libc(sigset_t* s);
 const sigset* from_libc(const sigset_t* s);
 
-sigset* thread_signals();
+sigset* thread_pending_signals();
+sigset* thread_pending_signals(sched::thread *t);
 
 void generate_signal(siginfo_t &siginfo, exception_frame* ef);
 void handle_mmap_fault(ulong addr, int sig, exception_frame* ef);

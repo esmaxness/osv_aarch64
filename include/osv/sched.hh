@@ -371,6 +371,8 @@ public:
             bool main = false);
     ~thread();
     void start();
+    /* is_started returns false if status is invalid, unstarted or prestarted */
+    bool is_started();
     template <class Pred>
     static void wait_until_interruptible(Pred pred);
     template <class Pred>

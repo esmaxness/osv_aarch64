@@ -245,7 +245,7 @@ LFS64(posix_fallocate);
 
 int getpid()
 {
-    return 0;
+    return 1;
 }
 
 //    WCTDEF(alnum), WCTDEF(alpha), WCTDEF(blank), WCTDEF(cntrl),

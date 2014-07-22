@@ -803,6 +803,12 @@ void thread::start()
     wake();
 }
 
+bool thread::is_started()
+{
+    enum thread::status st = _detached_state->st.load();
+    return st != status::invalid && st != status::unstarted && st != status::prestarted;
+}
+
 void thread::prepare_wait()
 {
     // After setting the thread's status to "waiting", we must not preempt it,
