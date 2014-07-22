@@ -14,7 +14,7 @@
 
 namespace osv {
 
-static const unsigned nsignals = 64;
+static const int nsignals = 64;
 
 struct sigset {
     std::bitset<nsignals> mask;

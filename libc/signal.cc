@@ -5,6 +5,8 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include "arch/x64/atomic.h"
+
 #include "signal.hh"
 #include <string.h>
 #include <unistd.h>
@@ -25,14 +27,12 @@ namespace osv {
 
 // we can't use have __thread sigset because of the constructor
 __thread __attribute__((aligned(sizeof(sigset))))
-    char thread_signal_mask[sizeof(sigset)];
+    char thread_blocked_sigmask[sizeof(sigset)];
+__thread __attribute__((aligned(sizeof(sigset))))
+    char thread_pending_sigmask[sizeof(sigset)];
 
-// Let's ignore rt signals. For standard signals, signal(7) says order is
-// unspecified over multiple deliveries, so we always record the last one.  It
-// also relieves us of any need for locking, since it doesn't matter if the
-// pending signal changes: returning any one is fine
-__thread int thread_pending_signal;
-
+unsigned long default_sig_ignored = 1 << SIGCONT | 1 << SIGCHLD |
+                                    1 << SIGWINCH | 1 << SIGURG;
 struct sigaction signal_actions[nsignals];
 
 sigset* from_libc(sigset_t* s)
@@ -45,39 +45,74 @@ const sigset* from_libc(const sigset_t* s)
     return reinterpret_cast<const sigset*>(s);
 }
 
-sigset* thread_signals()
+sigset* thread_blocked_signals()
 {
-    return reinterpret_cast<sigset*>(thread_signal_mask);
+    return reinterpret_cast<sigset*>(thread_blocked_sigmask);
 }
 
-sigset* thread_signals(sched::thread *t)
+sigset* thread_blocked_signals(sched::thread *t)
 {
-    return t->remote_thread_local_ptr<sigset>(&thread_signal_mask);
+    if (t != sched::thread::current()) {
+        return t->remote_thread_local_ptr<sigset>(&thread_blocked_sigmask);
+    } else {
+        return thread_blocked_signals();
+    }
+}
+
+sigset* thread_pending_signals()
+{
+    return reinterpret_cast<sigset*>(thread_pending_sigmask);
+}
+
+sigset* thread_pending_signals(sched::thread *t)
+{
+    if (t != sched::thread::current()) {
+        return t->remote_thread_local_ptr<sigset>(&thread_pending_sigmask);
+    } else {
+        return thread_pending_signals();
+    }
 }
 
 inline bool is_sig_dfl(const struct sigaction &sa) {
-    return (!(sa.sa_flags & SA_SIGINFO) && sa.sa_handler == SIG_DFL);
+    return sa.sa_handler == SIG_DFL;
 }
 
 inline bool is_sig_ign(const struct sigaction &sa) {
-    return (!(sa.sa_flags & SA_SIGINFO) && sa.sa_handler == SIG_IGN);
+    return sa.sa_handler == SIG_IGN;
+}
+
+inline bool is_sig_dfl_ign(int sig) {
+    return default_sig_ignored & (1 << sig);
+}
+
+inline bool is_sig_pending(int sig) {
+    return thread_pending_signals()->mask.test(sig);
+}
+
+inline bool is_sig_pending(sched::thread *t, int sig) {
+    return thread_pending_signals(t)->mask.test(sig);
+}
+
+inline bool is_sig_blocked(int sig) {
+    return thread_blocked_signals()->mask.test(sig);
+}
+
+inline bool is_sig_blocked(sched::thread *t, int sig) {
+    return thread_blocked_signals(t)->mask.test(sig);
 }
 
 typedef std::list<sched::thread *> thread_list;
 static std::array<thread_list, nsignals> waiters;
 mutex waiters_mutex;
 
-int wake_up_signal_waiters(int signo)
+sched::thread *get_first_signal_waiter(int signo)
 {
     SCOPE_LOCK(waiters_mutex);
-    int woken = 0;
 
-    for (auto& t: waiters[signo]) {
-        woken++;
-        t->remote_thread_local_var<int>(thread_pending_signal) = signo;
-        t->wake();
-    }
-    return woken;
+    if (waiters[signo].empty())
+        return nullptr;
+
+    return waiters[signo].first();
 }
 
 void wait_for_signal(int signo)
@@ -92,6 +127,16 @@ void unwait_for_signal(sched::thread *t, int signo)
     waiters[signo].remove(t);
 }
 
+bool is_waiting_for_signal(sched::thread *t, int signo)
+{
+    SCOPE_LOCK(waiters_mutex);
+    for (auto t2 : waiters[signo]) {
+        if (t2 == t)
+            return true;
+    }
+    return false;
+}
+
 void unwait_for_signal(int signo)
 {
     unwait_for_signal(sched::thread::current(), signo);
@@ -101,9 +146,9 @@ void __attribute__((constructor)) signals_register_thread_notifier()
 {
     sched::thread::register_exit_notifier(
         [](sched::thread *t) {
-            sigset *set = thread_signals(t);
+            sigset *set = thread_blocked_signals(t);
             if (!set->mask.any()) { return; }
-            for (unsigned i = 0; i < nsignals; ++i) {
+            for (int i = 0; i < nsignals; i++) {
                 if (set->mask.test(i)) {
                     unwait_for_signal(t, i);
                 }
@@ -112,22 +157,116 @@ void __attribute__((constructor)) signals_register_thread_notifier()
     );
 }
 
+/* perform the action associated with a signal */
+void complete_signal(sched::thread *t, int sig)
+{
+    if (t == sched::thread::current()) {
+        assert(is_sig_pending(sig));
+        thread_pending_signals()->mask.reset(sig);
+    } else {
+        assert(is_sig_pending(t, sig));
+        thread_pending_signals(t)->mask.reset(sig);
+    }
+
+    if (is_sig_dfl(signal_actions[sig])) {
+        if (is_sig_dfl_ign(sig)) {
+            /* do nothing */
+            return;
+        } else {
+            abort("received signal %d (\"%s\"). Aborting.\n",
+                  sig, strsignal(sig));
+        }
+    }
+
+    if (is_sig_ign(signal_actions[sig])) {
+        /* do nothing */
+        return;
+    }
+
+    // User-defined signal handler. Run it in a new thread. This isn't
+    // very Unix-like behavior.
+    const auto sa = signal_actions[sig];
+    auto newt = new sched::thread([=] {
+            if (sa.sa_flags & SA_RESETHAND) {
+                signal_actions[sig].sa_flags = 0;
+                signal_actions[sig].sa_handler = SIG_DFL;
+            }
+            if (sa.sa_flags & SA_SIGINFO) {
+                // FIXME: proper second (siginfo) and third (context) arguments (See example in call_signal_handler)
+                sa.sa_sigaction(sig, nullptr, nullptr);
+            } else {
+                if (sa.sa_flags & SA_RESETHAND) {
+                    signal_actions[sig].sa_flags = 0;
+                    signal_actions[sig].sa_handler = SIG_DFL;
+                }
+                sa.sa_handler(sig);
+            }
+        }, sched::thread::attr().detached().stack(65536).name("signal_handler"));
+    t->interrupted(true);
+    newt->start();
+}
+
+/* send a signal to a thread; t = 0 sends to any thread */
+void send_signal(sched::thread *t, int sig)
+{
+    bool t_waiting = false;
+
+    if (!t) { /* need to find a suitable thread */
+        t = get_first_signal_waiter(sig);
+        if (t) {
+            t_waiting = true;
+        } else {
+            sched::with_all_threads([&](sched::thread &next) {
+                    if (!is_sig_blocked(&next, sig)) {
+                        t = &next;
+                    }
+            });
+            if (!t) {
+                /* quite uncommon occurrence: all threads blocked this.
+                 * We should set it as pending globally, for the next
+                 * thread which unblocks it or sigwaits for it;
+                 * instead, we set it as pending for current.
+                 */
+                debug("send_signal: signal %d is blocked globally.\n", sig);
+                t = sched::thread::current();
+            }
+        }
+    } else {    /* check the specific thread */
+        if (t != sched::thread::current() &&
+            is_waiting_for_signal(t, sig)) {
+            t_waiting = true;
+        }
+    }
+
+    if (t == sched::thread::current()) {
+        thread_pending_signals()->mask.set(sig);
+    } else {
+        thread_pending_signals(t)->mask.set(sig);
+    }
+
+    if (t_waiting) {
+        t->wake();
+    } else if (!is_sig_blocked(t, sig)) {
+        complete_signal(t, sig);
+    } else if (t == sched::thread::current()) {
+        thread_pending_signals()->mask.set(sig);
+    } else {
+        thread_pending_signals(t)->mask.set(sig);
+    }
+}
+
 void generate_signal(siginfo_t &siginfo, exception_frame* ef)
 {
-    if (pthread_self() && thread_signals()->mask[siginfo.si_signo]) {
-        // FIXME: need to find some other thread to deliver
-        // FIXME: the signal to.
-        //
-        // There are certainly no waiters for this, because since we
-        // only deliver signals through this method directly, the thread
-        // needs to be running to generate them. So definitely not waiting.
-        abort();
-    }
-    if (is_sig_dfl(signal_actions[siginfo.si_signo])) {
-        // Our default is to abort the process
-        abort();
-    } else if(!is_sig_ign(signal_actions[siginfo.si_signo])) {
-        arch::build_signal_frame(ef, siginfo, signal_actions[siginfo.si_signo]);
+    int sig = siginfo.si_signo;
+
+    if (is_sig_dfl(signal_actions[sig])) {
+        if (!is_sig_dfl_ign(sig)) {
+            abort("generated signal %d (\"%s\"): aborting.\n",
+                  sig, strsignal(sig));
+
+        } else if (!is_sig_ign(signal_actions[sig])) {
+            arch::build_signal_frame(ef, siginfo, signal_actions[sig]);
+        }
     }
 }
 
@@ -137,6 +276,19 @@ void handle_mmap_fault(ulong addr, int sig, exception_frame* ef)
     si.si_signo = sig;
     si.si_addr = reinterpret_cast<void*>(addr);
     generate_signal(si, ef);
+}
+
+int sigwait_pred(const sigset *set)
+{
+    auto temp = thread_pending_signals()->mask & set->mask;
+    unsigned long mask = temp.to_ulong();
+
+    if (mask) {
+        int found = a_ctz_64(mask);
+        return found;
+    } else {
+        return 0;
+    }
 }
 
 }
@@ -172,42 +324,52 @@ int sigismember(const sigset_t *sigset, int signum)
     return from_libc(sigset)->mask.test(signum);
 }
 
+void sigprocmask_block(int sig)
+{
+    /* block an unblocked signal */
+    thread_blocked_signals()->mask.set(sig);
+}
+
+void sigprocmask_unblock(int sig)
+{
+    /* unblock a blocked signal */
+    if (is_sig_pending(sig)) {
+        complete_signal(sched::thread::current(), sig);
+    }
+    thread_blocked_signals()->mask.reset(sig);
+}
+
 int sigprocmask(int how, const sigset_t* _set, sigset_t* _oldset)
 {
     auto set = from_libc(_set);
     auto oldset = from_libc(_oldset);
     if (oldset) {
-        *oldset = *thread_signals();
+        *oldset = *thread_blocked_signals();
     }
     if (set) {
-        switch (how) {
-        case SIG_BLOCK:
-            for (unsigned i = 0; i < nsignals; ++i) {
+        for (int i = 0; i < nsignals; i++) {
+            switch (how) {
+            case SIG_BLOCK:
+                if (!is_sig_blocked(i) && set->mask.test(i))
+                    sigprocmask_block(i);
+                break;
+            case SIG_UNBLOCK:
+                if (is_sig_blocked(i) && set->mask.test(i))
+                    sigprocmask_unblock(i);
+                break;
+            case SIG_SETMASK:
                 if (set->mask.test(i)) {
-                    wait_for_signal(i);
+                    if (!is_sig_blocked(i))
+                        sigprocmask_block(i);
+                } else {
+                    if (is_sig_blocked(i))
+                        sigprocmask_unblock(i);
                 }
+                break;
+            default:
+                errno = EINVAL;
+                return -1;
             }
-            thread_signals()->mask |= set->mask;
-            break;
-        case SIG_UNBLOCK:
-            for (unsigned i = 0; i < nsignals; ++i) {
-                if (set->mask.test(i)) {
-                    unwait_for_signal(i);
-                }
-            }
-            thread_signals()->mask &= ~set->mask;
-            break;
-        case SIG_SETMASK:
-            for (unsigned i = 0; i < nsignals; ++i) {
-                unwait_for_signal(i);
-                if (set->mask.test(i)) {
-                    wait_for_signal(i);
-                }
-            }
-            thread_signals()->mask = set->mask;
-            break;
-        default:
-            abort();
         }
     }
     return 0;
@@ -216,7 +378,7 @@ int sigprocmask(int how, const sigset_t* _set, sigset_t* _oldset)
 int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact)
 {
     // FIXME: We do not support any sa_flags besides SA_SIGINFO.
-    if (signum < 0 || signum >= (int)nsignals) {
+    if (signum < 0 || signum >= nsignals) {
         errno = EINVAL;
         return -1;
     }
@@ -271,10 +433,38 @@ int sigignore(int signum)
     return sigaction(signum, &act, nullptr);
 }
 
-int sigwait(const sigset_t *set, int *sig)
+int sigwait(const sigset_t *_set, int *sig)
 {
-    sched::thread::wait_until([sig] { return *sig = thread_pending_signal; });
-    thread_pending_signal = 0;
+    int found;
+    if (!_set) {
+        errno = EINVAL;
+        return -1;
+    }
+    const osv::sigset set = *(from_libc(_set));
+    found = sigwait_pred(&set);
+    if (found) {
+        thread_pending_signals()->mask.reset(found);
+        *sig = found;
+        return 0;
+    }
+
+    for (int i = 0; i < nsignals; i++) {
+        if (set.mask.test(i)) {
+            wait_for_signal(i);
+        }
+    }
+    sched::thread::wait_until([set, &found] {
+            return found = sigwait_pred(&set);
+    });
+
+    thread_pending_signals()->mask.reset(found);
+    *sig = found;
+
+    for (int i = 0; i < nsignals; i++) {
+        if (set.mask.test(i)) {
+            unwait_for_signal(i);
+        }
+    }
     return 0;
 }
 
@@ -313,55 +503,13 @@ int kill(pid_t pid, int sig)
         // testing the pid.
         return 0;
     }
-    if (sig < 0 || sig >= (int)nsignals) {
+    if (sig < 0 || sig >= nsignals) {
         errno = EINVAL;
         return -1;
     }
-    if (is_sig_dfl(signal_actions[sig])) {
-        // Our default is to power off.
-        debug("Uncaught signal %d (\"%s\"). Powering off.\n",
-                sig, strsignal(sig));
-        osv::poweroff();
-    } else if(!is_sig_ign(signal_actions[sig])) {
-        if ((pid == 0) || (pid == -1)) {
-            // That semantically means signalling everybody (or that, or the
-            // user did getpid() and got 0, all the same. So we will signal
-            // every thread that is waiting for this.
-            //
-            // The thread does not expect the signal handler to still be delivered,
-            // so if we wake up some folks (usually just the one waiter), we should
-            // not continue processing.
-            //
-            // FIXME: Maybe it could be a good idea for our getpid() to start
-            // returning 1 so we can differentiate between those cases?
-            if (wake_up_signal_waiters(sig)) {
-                return 0;
-            }
-        }
 
-        // User-defined signal handler. Run it in a new thread. This isn't
-        // very Unix-like behavior, but if we assume that the program doesn't
-        // care which of its threads handle the signal - why not just create
-        // a completely new thread and run it there...
-        const auto sa = signal_actions[sig];
-        auto t = new sched::thread([=] {
-            if (sa.sa_flags & SA_RESETHAND) {
-                signal_actions[sig].sa_flags = 0;
-                signal_actions[sig].sa_handler = SIG_DFL;
-            }
-            if (sa.sa_flags & SA_SIGINFO) {
-                // FIXME: proper second (siginfo) and third (context) arguments (See example in call_signal_handler)
-                sa.sa_sigaction(sig, nullptr, nullptr);
-            } else {
-                if (sa.sa_flags & SA_RESETHAND) {
-                    signal_actions[sig].sa_flags = 0;
-                    signal_actions[sig].sa_handler = SIG_DFL;
-                }
-                sa.sa_handler(sig);
-            }
-        }, sched::thread::attr().detached().stack(65536).name("signal_handler"));
-        t->start();
-    }
+    /* send the signal to any thread */
+    send_signal(nullptr, sig);
     return 0;
 }
 
@@ -466,10 +614,7 @@ void itimer::work()
                     } else {
                         _due = _no_alarm;
                     }
-                    kill(0, _signum);
-                    if(!is_sig_ign(signal_actions[_signum])) {
-                        _owner_thread->interrupted(true);
-                    }
+                    send_signal(_owner_thread, _signum);
                 } else {
                     tmr.cancel();
                 }
