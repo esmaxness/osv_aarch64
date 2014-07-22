@@ -181,7 +181,7 @@ void cpu::init_idle_thread()
     running_since = osv::clock::uptime::now();
     std::string name = osv::sprintf("idle%d", id);
     idle_thread = new thread([this] { idle(); }, thread::attr().pin(this).name(name));
-    idle_thread->set_priority(thread::priority_idle);
+    idle_thread->set_realtime(SCHED_IDLE, 0);
 }
 
 // Estimating a *running* thread's total cpu usage (in thread::thread_clock())
@@ -547,6 +547,35 @@ void thread::yield()
     // Note that reschedule_from_interrupt will further increase t->_runtime
     // by thyst, giving the other thread 2*thyst to run before going back to t
     t->_detached_state->_cpu->reschedule_from_interrupt();
+}
+
+void thread::set_realtime(int sched_policy, int priority,
+                          thread_realtime::duration time_slice)
+{
+    int policy = sched_policy & ~SCHED_RESET_ON_FORK; /* ignore flag */
+
+    switch (policy) {
+    case SCHED_OTHER:
+        _realtime._priority = 0;
+        set_priority(1.0);
+        break;
+    case SCHED_BATCH:
+    case SCHED_IDLE:
+        _realtime._priority = 0;
+        set_priority(thread::priority_idle);
+        break;
+    case SCHED_FIFO:
+        time_slice = thread_realtime::duration(-1);
+    case SCHED_RR:
+        _realtime._priority = priority;
+        _realtime._time_slice = time_slice;
+        set_priority(1.0);
+        break;
+    default:
+        assert(0);
+    }
+
+    _realtime._policy = sched_policy;
 }
 
 void thread::set_priority(float priority)

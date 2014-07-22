@@ -318,6 +318,7 @@ public:
     using duration = thread_runtime::duration;
     unsigned _priority = 0;
     duration _time_slice = duration::zero();
+    int _policy = SCHED_OTHER; /* the current POSIX RT scheduling policy */
 };
 
 /**
@@ -483,11 +484,11 @@ public:
      * explained in set_priority().
      */
     float priority() const;
-    void set_realtime(int priority, thread_realtime::duration time_slice =
-            thread_realtime::duration::zero()) {
-        _realtime._priority = priority;
-        _realtime._time_slice = time_slice;
-    }
+    /**
+     * Set the thread POSIX realtime policy
+     */
+    void set_realtime(int policy, int priority, thread_realtime::duration time_slice = thread_realtime::duration::zero());
+
     class thread_realtime get_realtime() {
         return _realtime;
     }

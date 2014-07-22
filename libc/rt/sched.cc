@@ -56,47 +56,32 @@ int sched_get_priority_max(int policy)
     return sched_get_priority_minmax(policy, SCHED_PRIO_MAX);
 }
 
-static int sched_setparam_aux(sched::thread *t, int policy, int prio)
+static int sched_setparam_aux(sched::thread *t, int sched_policy, int prio)
 {
-    policy &= ~SCHED_RESET_ON_FORK; /* ignore flag */
-    int slice = 0;
+    int policy = sched_policy & ~SCHED_RESET_ON_FORK; /* ignore flag */
 
     switch (policy) {
     case SCHED_OTHER:
-        if (prio != 0) {
-            errno = EINVAL;
-            return -1;
-        }
-        t->set_realtime(0);
-        // we need to set the non-RT priority to default, so that switching
-        // from IDLE/BATCH to OTHER actually works;
-        t->set_priority(1.0);
-        break;
     case SCHED_BATCH:
     case SCHED_IDLE:
         if (prio != 0) {
             errno = EINVAL;
             return -1;
         }
-        t->set_realtime(0);
-        t->set_priority(sched::thread::priority_idle);
         break;
     case SCHED_FIFO:
-        slice = -1;
     case SCHED_RR:
         if (prio < SCHED_PRIO_MIN || prio > SCHED_PRIO_MAX) {
             errno = EINVAL;
             return -1;
         }
-        t->set_realtime(prio, sched::thread_realtime::duration(slice));
-        // for consistency we set the non-RT priority to default here as well
-        t->set_priority(1.0);
         break;
     default:
         errno = EINVAL;
         return -1;
     }
 
+    t->set_realtime(sched_policy, prio);
     return 0;
 }
 
@@ -133,14 +118,7 @@ int sched_getscheduler(pid_t pid)
         return -1;
     }
 
-    auto rt = t->get_realtime();
-
-    if (rt._priority == 0) {
-        return t->priority() != sched::thread::priority_idle ?
-            SCHED_OTHER : SCHED_IDLE; /* XXX or SCHED_BATCH */
-    }
-
-    return rt._time_slice < 0 ? SCHED_FIFO : SCHED_RR;
+    return t->get_realtime()._policy;
 }
 
 int sched_setparam(pid_t pid, const struct sched_param *param)
@@ -156,11 +134,7 @@ int sched_setparam(pid_t pid, const struct sched_param *param)
         return -1;
     }
 
-    /* XXX since we are not storing the policy, we need to recalculate it
-     * calling sched_getscheduler.
-     */
-    return sched_setparam_aux(t, sched_getscheduler(pid),
-                              param->sched_priority);
+    return sched_setparam_aux(t, t->get_realtime()._policy, param->sched_priority);
 }
 
 int sched_getparam(pid_t pid, struct sched_param *param)
@@ -172,7 +146,6 @@ int sched_getparam(pid_t pid, struct sched_param *param)
         return -1;
     }
 
-    auto rt = t->get_realtime();
-    param->sched_priority = rt._priority;
+    param->sched_priority = t->get_realtime()._priority;
     return 0;
 }
