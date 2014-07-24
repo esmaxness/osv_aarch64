@@ -145,9 +145,12 @@ gcc-opt-Og := $(call compiler-flag, -Og, -Og, $(src)/compiler/empty.cc)
 CXXFLAGS = -std=gnu++11 $(COMMON)
 CFLAGS = -std=gnu99 $(COMMON)
 
+LIBC_INTERNAL = -I $(src)/libc/internal -I $(src)/libc/stdio
+LIBC_ARCH = -I $(src)/libc/arch/$(arch)
+
 # should be limited to files under libc/ eventually
-CFLAGS += -I $(src)/libc/stdio -I $(src)/libc/internal -I  $(src)/libc/arch/$(arch) \
-	-Wno-missing-braces -Wno-parentheses -Wno-unused-but-set-variable
+CFLAGS += $(LIBC_INTERNAL) $(LIBC_ARCH) -Wno-missing-braces -Wno-parentheses -Wno-unused-but-set-variable
+CXXFLAGS += $(LIBC_ARCH)
 
 ASFLAGS = -g $(autodepend) -DASSEMBLY
 
