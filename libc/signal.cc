@@ -18,10 +18,10 @@
 #include <osv/condvar.h>
 #include <osv/power.hh>
 #include <osv/clock.hh>
+#include <osv/itimer.hh>
+#include <osv/signal.hh>
 #include <api/setjmp.h>
 #include <osv/stubbing.hh>
-
-using namespace osv::clock::literals;
 
 namespace osv {
 
@@ -156,7 +156,7 @@ void __attribute__((constructor)) signals_register_thread_notifier()
 }
 
 /* perform the action associated with a signal */
-void complete_signal(sched::thread *t, int sig)
+static void complete_signal(sched::thread *t, int sig)
 {
     if (t == sched::thread::current()) {
         assert(is_sig_pending(sig));
@@ -201,8 +201,14 @@ void complete_signal(sched::thread *t, int sig)
             }
         }, sched::thread::attr().detached().stack(65536).name("signal_handler"));
     t->interrupted(true);
-    thread_blocked_signals(newt)->mask.set();
+    block_signals(newt);
     newt->start();
+}
+
+/* block all signals */
+void block_signals(sched::thread *t)
+{
+    thread_blocked_signals(t)->mask.set();
 }
 
 /* send a signal to a thread; t = 0 sends to any thread */
@@ -522,153 +528,8 @@ int kill(pid_t pid, int sig)
 // alarm() is an archaic Unix API and didn't age well. It should should never
 // be used in new programs.
 
-class itimer {
-public:
-    explicit itimer(int signum, const char *name);
-    void cancel_this_thread();
-    int set(const struct itimerval *new_value,
-        struct itimerval *old_value);
-    int get(struct itimerval *curr_value);
-
-private:
-    void work();
-
-    // Fllowing functions doesn't take mutex, caller has responsibility
-    // to take it
-    void cancel();
-    void set_interval(const struct timeval *tv);
-    void set_value(const struct timeval *tv);
-    void get_interval(struct timeval *tv);
-    void get_value(struct timeval *tv);
-
-    mutex _mutex;
-    condvar _cond;
-    sched::thread *_alarm_thread;
-    sched::thread *_owner_thread = nullptr;
-    const osv::clock::uptime::time_point _no_alarm {};
-    osv::clock::uptime::time_point _due = _no_alarm;
-    std::chrono::nanoseconds _interval;
-    int _signum;
-    bool _started = false;
-};
-
 static itimer itimer_real(SIGALRM, "itimer-real");
 static itimer itimer_virt(SIGVTALRM, "itimer-virt");
-
-itimer::itimer(int signum, const char *name)
-    : _alarm_thread(new sched::thread([&] { work(); },
-                    sched::thread::attr().name(name)))
-    , _signum(signum)
-{
-}
-
-void itimer::cancel_this_thread()
-{
-    if(_owner_thread == sched::thread::current()) {
-        WITH_LOCK(_mutex) {
-            if(_owner_thread == sched::thread::current()) {
-                cancel();
-            }
-        }
-    }
-}
-
-int itimer::set(const struct itimerval *new_value,
-    struct itimerval *old_value)
-{
-    if (!new_value)
-        return EINVAL;
-
-    WITH_LOCK(_mutex) {
-        if (old_value) {
-            get_interval(&old_value->it_interval);
-            get_value(&old_value->it_value);
-        }
-        cancel();
-        if (new_value->it_value.tv_sec || new_value->it_value.tv_usec) {
-            set_interval(&new_value->it_interval);
-            set_value(&new_value->it_value);
-        }
-     }
-    return 0;
-}
-
-int itimer::get(struct itimerval *curr_value)
-{
-    WITH_LOCK(_mutex) {
-        get_interval(&curr_value->it_interval);
-        get_value(&curr_value->it_value);
-    }
-    return 0;
-}
- 
-void itimer::work()
-{
-    sched::timer tmr(*sched::thread::current());
-    while (true) {
-        WITH_LOCK(_mutex) {
-            if (_due != _no_alarm) {
-                tmr.set(_due);
-                _cond.wait(_mutex, &tmr);
-                if (tmr.expired()) {
-                    if (_interval != decltype(_interval)::zero()) {
-                        auto now = osv::clock::uptime::now();
-                        _due = now + _interval;
-                    } else {
-                        _due = _no_alarm;
-                    }
-                    send_signal(_owner_thread, _signum);
-                } else {
-                    tmr.cancel();
-                }
-            } else {
-                _cond.wait(_mutex);
-            }
-        }
-    }
-}
-
-void itimer::cancel()
-{
-    _due = _no_alarm;
-    _interval = decltype(_interval)::zero();
-    _owner_thread = nullptr;
-    _cond.wake_one();
-}
-
-void itimer::set_value(const struct timeval *tv)
-{
-    auto now = osv::clock::uptime::now();
-
-    if (!_started) {
-        thread_blocked_signals(_alarm_thread)->mask.set();
-        _alarm_thread->start();
-        _started = true;
-    }
-    _due = now + tv->tv_sec * 1_s + tv->tv_usec * 1_us;
-    _owner_thread = sched::thread::current();
-    _cond.wake_one();
-}
-
-void itimer::set_interval(const struct timeval *tv)
-{
-    _interval = tv->tv_sec * 1_s + tv->tv_usec * 1_us;
-}
-
-void itimer::get_value(struct timeval *tv)
-{
-    if (_due == _no_alarm) {
-        tv->tv_sec = tv->tv_usec = 0;
-    } else {
-        auto now = osv::clock::uptime::now();
-        fill_tv(_due - now, tv);
-    }
-}
-
-void itimer::get_interval(struct timeval *tv)
-{
-    fill_tv(_interval, tv);
-}
 
 void cancel_this_thread_alarm()
 {

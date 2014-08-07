@@ -860,6 +860,7 @@ objects += core/printf.o
 objects += linux.o
 objects += core/commands.o
 objects += core/sched.o
+objects += core/itimer.o
 objects += core/mmio.o
 objects += core/kprintf.o
 objects += core/trace.o

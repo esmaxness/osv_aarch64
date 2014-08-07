@@ -21,6 +21,13 @@ private:
     friend class sched::wait_object<signal_catcher>;
 };
 
+namespace osv {
+    /* send a signal to a thread; t = 0 sends to any thread */
+    void send_signal(sched::thread *t, int sig);
+    /* set the signal blocked mask */
+    void block_signals(sched::thread *t);
+}
+
 namespace sched {
 
 template <>
