@@ -50,7 +50,19 @@ struct timezone {
 #define timersub(s,t,a) ( (a)->tv_sec = (s)->tv_sec - (t)->tv_sec, \
 	((a)->tv_usec = (s)->tv_usec - (t)->tv_usec) < 0 && \
 	((a)->tv_usec += 1000000, (a)->tv_sec--) )
-#endif
+
+#define timespecisset(t) ((t)->tv_sec || (t)->tv_nsec)
+#define timespecclear(t) ((t)->tv_sec = (t)->tv_nsec = 0)
+#define timespeccmp(s,t,op) ((s)->tv_sec == (t)->tv_sec ? \
+                             (s)->tv_nsec op (t)->tv_nsec : (s)->tv_sec op (t)->tv_sec)
+#define timespecadd(s,t,a) ( (a)->tv_sec = (s)->tv_sec + (t)->tv_sec, \
+        ((a)->tv_nsec = (s)->tv_nsec + (t)->tv_nsec) >= 1000000000L && \
+                          ((a)->tv_nsec -= 1000000000L, (a)->tv_sec++) )
+#define timespecsub(s,t,a) ( (a)->tv_sec = (s)->tv_sec - (t)->tv_sec, \
+        ((a)->tv_nsec = (s)->tv_nsec - (t)->tv_nsec) < 0 && \
+                          ((a)->tv_nsec += 1000000000L, (a)->tv_sec--) )
+
+#endif /* _GNU_SOURCE || _BSD_SOURCE */
 
 #ifdef __cplusplus
 }

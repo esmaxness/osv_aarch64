@@ -14,7 +14,7 @@
 #include <osv/clock.hh>
 #include <osv/sched.hh>
 
-u64 convert(const timespec& ts)
+static u64 convert(const timespec& ts)
 {
     return ts.tv_sec * 1000000000 + ts.tv_nsec;
 }
@@ -34,6 +34,9 @@ int gettimeofday(struct timeval* tv, struct timezone* tz)
 
 int nanosleep(const struct timespec* req, struct timespec* rem)
 {
+    if (!req || req->tv_nsec < 0 || req->tv_nsec >= 1000000000L || req->tv_sec < 0)
+        return libc_error(EINVAL);
+
     sched::thread::sleep(std::chrono::nanoseconds(convert(*req)));
     return 0;
 }
@@ -56,6 +59,9 @@ static inline void fill_ts(std::chrono::duration<Rep, Period> d, timespec *ts)
 
 int clock_gettime(clockid_t clk_id, struct timespec* ts)
 {
+    if (!ts)
+        return libc_error(EINVAL);
+
     switch (clk_id) {
     case CLOCK_MONOTONIC:
         fill_ts(osv::clock::uptime::now().time_since_epoch(), ts);
@@ -118,4 +124,41 @@ clock_t clock(void)
     struct timespec ts;
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts);
     return ts.tv_sec * 1000000000L + ts.tv_nsec;
+}
+
+int clock_nanosleep(clockid_t clock_id, int flags,
+                    const struct timespec *request,
+                    struct timespec *remain)
+{
+    /* XXX we are implementing really only CLOCK_MONOTONIC, */
+    /* and we don't support remain, due to signals. */
+    WARN_STUBBED();
+    if (!request) {
+        return libc_error(EINVAL);
+    }
+    if (remain) {
+        assert(0); /* XXX not supported yet */
+    }
+    if (clock_id != CLOCK_MONOTONIC) {
+        assert(0); /* XXX not supported yet */
+    }
+
+    switch (flags) {
+    case 0:
+        return nanosleep(request, NULL);
+    case TIMER_ABSTIME: {
+        struct timespec ts;
+        if (clock_gettime(clock_id, &ts) != 0) {
+            return -1;
+        }
+        if (timespeccmp(request, &ts, <=)) {
+            return 0;
+        }
+        sched::thread::sleep(osv::clock::uptime::time_point(
+                                 osv::clock::uptime::duration(convert(*request))));
+        return 0;
+    }
+    default:
+        return libc_error(EINVAL);
+    }
 }

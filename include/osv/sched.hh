@@ -430,6 +430,8 @@ public:
     inline void wake_with_from_mutex(Action action);
     template <class Rep, class Period>
     static void sleep(std::chrono::duration<Rep, Period> duration);
+    template <class Clock, class Duration>
+    static void sleep(std::chrono::time_point<Clock, Duration> time_point);
     static void yield();
     static void exit() __attribute__((__noreturn__));
 #ifdef __OSV_CORE__
@@ -1131,6 +1133,14 @@ void thread::sleep(std::chrono::duration<Rep, Period> duration)
 {
     timer t(*current());
     t.set(duration);
+    wait_until([&] { return t.expired(); });
+}
+
+template <class Clock, class Duration>
+void thread::sleep(std::chrono::time_point<Clock, Duration> time_point)
+{
+    timer t(*current());
+    t.set(time_point);
     wait_until([&] { return t.expired(); });
 }
 
