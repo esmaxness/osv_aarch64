@@ -343,9 +343,9 @@ intermediate_page_post(PageOps& pops, hw_ptep<N> ptep, uintptr_t offset)
 template<typename PageOp, int ParentLevel> class map_level;
 
 template<typename PageOp>
-        void map_range(uintptr_t vma_start, uintptr_t vstart, size_t size, PageOp& page_mapper, size_t slop = page_size)
+void map_range(uintptr_t vma_start, uintptr_t vstart, size_t size, PageOp& page_mapper, size_t slop = page_size, int mem_type = 0)
 {
-    map_level<PageOp, 4> pt_mapper(vma_start, vstart, size, page_mapper, slop);
+    map_level<PageOp, 4> pt_mapper(vma_start, vstart, size, page_mapper, slop, mem_type);
     pt_mapper(hw_ptep<4>::force(mmu::get_root_pt(vstart)));
 }
 
@@ -356,13 +356,18 @@ private:
     uintptr_t vend;
     size_t slop;
     PageOp& page_mapper;
+    int mem_type;
+
     static constexpr int level = ParentLevel - 1;
 
-    friend void map_range<PageOp>(uintptr_t, uintptr_t, size_t, PageOp&, size_t);
+    friend void map_range<PageOp>(uintptr_t, uintptr_t, size_t, PageOp&, size_t, int);
     friend class map_level<PageOp, ParentLevel + 1>;
 
-    map_level(uintptr_t vma_start, uintptr_t vcur, size_t size, PageOp& page_mapper, size_t slop) :
-        vma_start(vma_start), vcur(vcur), vend(vcur + size - 1), slop(slop), page_mapper(page_mapper) {}
+    map_level(uintptr_t vma_start, uintptr_t vcur, size_t size,
+              PageOp& page_mapper, size_t slop, int mem_type) :
+        vma_start(vma_start), vcur(vcur), vend(vcur + size - 1),
+        slop(slop), page_mapper(page_mapper), mem_type(mem_type) {}
+
     pt_element<ParentLevel> read(const hw_ptep<ParentLevel>& ptep) const {
         return page_mapper.ptep_read(ptep);
     }
@@ -382,15 +387,16 @@ private:
     template<int N>
     typename std::enable_if<N == 0>::type
     map_range(uintptr_t vcur, size_t size, PageOp& page_mapper, size_t slop,
-            hw_ptep<N> ptep, uintptr_t base_virt)
+              hw_ptep<N> ptep, uintptr_t base_virt, int mem_type)
     {
     }
     template<int N>
     typename std::enable_if<N == level && N != 0>::type
     map_range(uintptr_t vcur, size_t size, PageOp& page_mapper, size_t slop,
-            hw_ptep<N> ptep, uintptr_t base_virt)
+              hw_ptep<N> ptep, uintptr_t base_virt, int mem_type)
     {
-        map_level<PageOp, level> pt_mapper(vma_start, vcur, size, page_mapper, slop);
+        map_level<PageOp, level> pt_mapper(vma_start, vcur, size, page_mapper,
+                                           slop, mem_type);
         pt_mapper(ptep, base_virt);
     }
     void operator()(hw_ptep<ParentLevel> parent, uintptr_t base_virt = 0) {
@@ -431,7 +437,7 @@ private:
                     if (!skip_pte(ptep)) {
                         if (descend(ptep) || !page(page_mapper, ptep, offset)) {
                             intermediate_page_pre(page_mapper, ptep, offset);
-                            map_range(vstart1, vend1 - vstart1 + 1, page_mapper, slop, ptep, base_virt);
+                            map_range(vstart1, vend1 - vstart1 + 1, page_mapper, slop, ptep, base_virt, mem_type);
                             intermediate_page_post(page_mapper, ptep, offset);
                         }
                     }
@@ -441,7 +447,7 @@ private:
                     }
                 }
             } else {
-                map_range(vstart1, vend1 - vstart1 + 1, page_mapper, slop, ptep, base_virt);
+                map_range(vstart1, vend1 - vstart1 + 1, page_mapper, slop, ptep, base_virt, mem_type);
             }
             base_virt += step;
             ++idx;
@@ -1689,13 +1695,13 @@ int shm_file::close()
     return 0;
 }
 
-void linear_map(void* _virt, phys addr, size_t size, size_t slop)
+void linear_map(void* _virt, phys addr, size_t size, size_t slop, int mem_type)
 {
     uintptr_t virt = reinterpret_cast<uintptr_t>(_virt);
     slop = std::min(slop, page_size_level(nr_page_sizes - 1));
     assert((virt & (slop - 1)) == (addr & (slop - 1)));
     linear_page_mapper phys_map(addr, size);
-    map_range(virt, virt, size, phys_map, slop);
+    map_range(virt, virt, size, phys_map, slop, mem_type);
 }
 
 void free_initial_memory_range(uintptr_t addr, size_t size)

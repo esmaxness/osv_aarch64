@@ -10,7 +10,8 @@
 
 namespace console {
 
-static volatile char *const uart = (char *)0x9000000; /* base addr */
+/* default base addr */
+static volatile char *uart = (char *)0x9000000;
 
 enum {
     UARTDR    = 0x000,
@@ -18,6 +19,12 @@ enum {
     UARTIMSC  = 0x038,
     UARTICR   = 0x044
 };
+
+void PL011_Console::set_base_addr(u64 addr)
+{
+    uart = (char *)addr;
+    debug_early_u64("pl011 base addr = ", (u64)uart);
+}
 
 void PL011_Console::flush() {
     return;

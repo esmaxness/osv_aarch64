@@ -295,7 +295,7 @@ bool is_page_aligned(void* addr)
 }
 
 void linear_map(void* virt, phys addr, size_t size,
-                size_t slop = mmu::page_size);
+                size_t slop = mmu::page_size, int mem_type = 0);
 void free_initial_memory_range(uintptr_t addr, size_t size);
 void switch_to_runtime_page_tables();
 

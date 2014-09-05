@@ -121,7 +121,9 @@ inline void pt_element_common<N>::set_pfn(u64 pfn, bool large) {
 }
 
 template<int N>
-pt_element<N> make_pte(phys addr, bool leaf, unsigned perm = perm_read | perm_write | perm_exec)
+pt_element<N> make_pte(phys addr, bool leaf,
+                       unsigned perm = perm_read | perm_write | perm_exec,
+                       int mem_type __attribute__ ((unused)))
 {
     assert(pt_level_traits<N>::leaf_capable::value || !leaf);
     bool large = pt_level_traits<N>::large_capable::value && leaf;

@@ -18,8 +18,8 @@
 
 namespace mmu {
 constexpr int max_phys_addr_size = 48;
-constexpr int device_range_start = 0x8000000;
-constexpr int device_range_stop = 0x10000000;
+// constexpr int device_range_start = 0x8000000;
+// constexpr int device_range_stop = 0x10000000;
 extern u64 mem_addr; /* set by the dtb_setup constructor */
 
 template<int N>
@@ -137,7 +137,9 @@ inline void pt_element_common<N>::set_pfn(u64 pfn, bool large) {
 }
 
 template<int N>
-pt_element<N> make_pte(phys addr, bool leaf, unsigned perm = perm_read | perm_write | perm_exec)
+pt_element<N> make_pte(phys addr, bool leaf,
+                       unsigned perm = perm_read | perm_write | perm_exec,
+                       int mem_type = 0)
 {
     assert(pt_level_traits<N>::leaf_capable::value || !leaf);
     bool large = pt_level_traits<N>::large_capable::value && leaf;
@@ -153,15 +155,16 @@ pt_element<N> make_pte(phys addr, bool leaf, unsigned perm = perm_read | perm_wr
     pte.set_accessed(true);
     pte.set_share(true);
 
-    if (addr >= mmu::device_range_start && addr < mmu::device_range_stop) {
-        /* we need to mark device memory as such, because the
-           semantics of the load/store instructions change */
+    /* we need to mark device memory as such, because the
+     * semantics of the load/store instructions change.
+     * Note: attridx are ignored by hardware for non-leaf.
+     */
+    if (mem_type != 0) {
         debug_early_u64("make_pte: device memory at ", (u64)addr);
         pte.set_attridx(0);
-    } else {
+    } else { /* default, normal memory */
         pte.set_attridx(4);
     }
-
     return pte;
 }
 

@@ -24,10 +24,68 @@ extern "C" {
 void *dtb;
 char *cmdline;
 
+static bool dtb_getprop_u32(int node, const char *name, u32 *retval)
+{
+    u32 *prop;
+    int size;
+
+    prop = (u32 *)fdt_getprop(dtb, node, name, &size);
+    if (!prop || size != 4) {
+        return false;
+    } else {
+        *retval = fdt32_to_cpu(*prop);
+        return true;
+    }
+}
+
+static bool dtb_getprop_u32_cascade(int node, const char *name, u32 *retval)
+{
+    while (node >= 0) {
+        bool status = dtb_getprop_u32(node, name, retval);
+        if (status == true) {
+            return true;
+        }
+        node = fdt_parent_offset(dtb, node);
+    }
+    return false;
+}
+
+static size_t dtb_get_reg(int node, u64 *addr)
+{
+    u32 addr_cells, size_cells;
+    *addr = 0;
+
+    if (!dtb_getprop_u32_cascade(node, "#address-cells", &addr_cells))
+        return 0;
+
+    if (!dtb_getprop_u32_cascade(node, "#size-cells", &size_cells))
+        return 0;
+
+    int size;
+    u32 *reg = (u32 *)fdt_getprop(dtb, node, "reg", &size);
+    int required = (addr_cells + size_cells) * sizeof(u32);
+
+    if (!reg || size < required)
+        return 0;
+
+    for (u32 i = 0; i < addr_cells; i++, reg++) {
+        *addr = *addr << 32 | fdt32_to_cpu(*reg);
+    }
+
+    size_t retval = 0;
+    for (u32 i = 0; i < size_cells; i++, reg++) {
+        retval = retval << 32 | fdt32_to_cpu(*reg);
+    }
+
+    return retval;
+}
+
 void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
 {
     void *olddtb;
-    osv::parse_cmdline(cmdline); /* will be overwritten with dtb */
+    int node;
+    size_t len;
+    const struct fdt_property *prop;
 
     if (fdt_check_header(dtb) != 0) {
         debug_early("dtb_setup: device tree blob invalid, using defaults.\n");
@@ -40,14 +98,47 @@ void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
         goto out_err_def_mem;
     }
 
+    debug_early_u64("memory::phys_mem_size = ", (u64)memory::phys_mem_size);
+    debug_early_u64("mem::mem_addr = ", (u64)mmu::mem_addr);
+    /* command line will be overwritten with DTB: move it inside DTB */
+    debug_early("early cmdline="); debug_early(cmdline); debug_early("\n");
+
+    node = fdt_path_offset(dtb, "/chosen");
+    if (node < 0) {
+        node = fdt_path_offset(dtb, "/");
+        if (node >= 0) {
+            node = fdt_add_subnode(dtb, node, "chosen");
+        }
+    }
+    if (node < 0) {
+        debug_early("dtb_setup: failed to add node /chosen for cmdline.\n");
+        goto out_err_dtb;
+    }
+
+    len = strlen(cmdline) + 1;
+    if (len > max_cmdline) {
+        abort("dtb_setup: command line too long.\n");
+    }
+
+    /* note: if already there, this replaces the old property */
+    if (fdt_setprop(dtb, node, "bootargs", cmdline, len) < 0) {
+        debug_early("dtb_setup: failed to set bootargs in /chosen.\n");
+        goto out_err_dtb;
+    }
+
     olddtb = dtb;
     dtb = (void *)OSV_KERNEL_BASE;
 
     if (fdt_move(olddtb, dtb, 0x10000) != 0) {
-        debug_early("dtb_setup: failed to move dtb (dtb too large?)\n");
+        debug_early("dtb_setup: failed to move dtb (dtb too large?).\n");
         goto out_err_dtb;
     }
 
+    prop = fdt_get_property(dtb, node, "bootargs", NULL);
+    if (!prop) {
+        abort("dtb_setup: cannot find cmdline after dtb move.\n");
+    }
+    cmdline = (char *)prop->data; /* command line now points inside dtb */
     goto out_ok; /* success */
 
  out_err_def_mem:
@@ -72,58 +163,34 @@ void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
     memory::phys_mem_size -= addr - mmu::mem_addr;
 }
 
-static u32 dtb_getprop_u32(int node, const char *name, int *lenp)
-{
-    u32 retval, *prop;
-    prop = (u32 *)fdt_getprop(dtb, node, name, lenp);
-    if (!prop) {
-        retval = *lenp = 0;
-    } else {
-        retval = fdt32_to_cpu(*prop);
-    }
-    return retval;
-}
-
 size_t dtb_get_phys_memory(u64 *addr)
 {
     size_t retval;
-    int node, size;
-    u32 addr_cells, size_cells;
+    int node;
 
     if (!dtb)
-        return 0;
-
-    node = fdt_path_offset(dtb, "/");
-    if (node < 0)
-        return 0;
-
-    addr_cells = dtb_getprop_u32(node, "#address-cells", &size);
-    if (!addr_cells || (size != 4))
-        return 0;
-
-    size_cells = dtb_getprop_u32(node, "#size-cells", &size);
-    if (!size_cells || (size != 4))
         return 0;
 
     node = fdt_path_offset(dtb, "/memory");
     if (node < 0)
         return 0;
 
-    u32 *reg = (u32 *)fdt_getprop(dtb, node, "reg", &size);
-    int required = (addr_cells + size_cells) * sizeof(u32);
+    retval = dtb_get_reg(node, addr);
+    return retval;
+}
 
-    if (!reg || size < required)
+u64 dtb_get_uart_base()
+{
+    u64 retval;
+    int node; size_t len __attribute__((unused));
+
+    if (!dtb)
         return 0;
 
-    *addr = 0;
-    for (u32 i = 0; i < addr_cells; i++, reg++) {
-        *addr = *addr << 32 | fdt32_to_cpu(*reg);
-    }
+    node = fdt_node_offset_by_compatible(dtb, -1, "pl011");
+    if (node < 0)
+        return 0;
 
-    retval = 0;
-    for (u32 i = 0; i < size_cells; i++, reg++) {
-        retval = retval << 32 | fdt32_to_cpu(*reg);
-    }
-
+    len = dtb_get_reg(node, &retval);
     return retval;
 }
