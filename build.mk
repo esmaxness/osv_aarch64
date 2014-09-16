@@ -402,7 +402,7 @@ ifeq ($(arch),aarch64)
 # to the bootfs.manifest.skel atm to get it to work.
 #
 tools += tests/tst-hello.so
-cmdline = --nomount tests/tst-hello.so
+cmdline = --nomount /tools/uush.so
 endif
 
 ifeq ($(arch),x64)
