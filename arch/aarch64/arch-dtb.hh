@@ -61,4 +61,39 @@ int dtb_get_timer_irq();
  */
 bool dtb_get_gic_v2(u64 *dist, size_t *dist_len, u64 *cpu, size_t *cpu_len);
 
+/* size_t dtb_get_pci_cfg(u64 *addr);
+ *
+ * gets the PCI configuration space base address and length.
+ * Returns 0 on failure.
+ */
+size_t dtb_get_pci_cfg(u64 *addr);
+
+/* bool dtb_get_pci_ranges(u64 *addr, size_t *len, int n);
+ *
+ * gets the CPU addressable memory regions corresponding
+ * to the to the PCI ranges. Returns false on failure.
+ */
+bool dtb_get_pci_ranges(u64 *addr, size_t *len, int n);
+
+/* int dtb_get_pci_irqmap_count();
+ *
+ * gets the number of mappings between pci devices and platform IRQs.
+ * a return value of -1 signals a parse error.
+ */
+int dtb_get_pci_irqmap_count();
+
+/* u32 dtb_get_pci_irqmask();
+ *
+ * gets the mask for just the slot member of the pci address.
+ * a return value of 0 signals a parse error.
+ */
+u32 dtb_get_pci_irqmask();
+
+/* bool dtb_get_pci_irqmap(u32 *slots, int *irq_ids, int n);
+ *
+ * fills the passed arrays with up to n IRQ mappings.
+ * Returns true on success, false on parse error.
+ */
+bool dtb_get_pci_irqmap(u32 *slots, int *irq_ids, int n);
+
 #endif /* ARCH_DTB_HH */
