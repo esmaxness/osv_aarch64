@@ -23,7 +23,11 @@ int virtio_driver::_disk_idx = 0;
 virtio_driver::virtio_driver(pci::device& dev)
     : hw_driver()
     , _dev(dev)
+
+#ifndef AARCH64_PORT_STUB
     , _msi(&dev)
+#endif
+
     , _num_queues(0)
     , _bar1(nullptr)
     , _cap_indirect_buf(false)
