@@ -122,6 +122,7 @@ public:
     virtual ~blk();
 
     virtual std::string get_name() const { return _driver_name; }
+    sched::thread *get_thread() { return _thread; }
     void read_config();
 
     virtual u32 get_driver_features();
@@ -150,6 +151,7 @@ private:
 
     std::string _driver_name;
     blk_config _config;
+    sched::thread *_thread; /* request done thread */
 
     //maintains the virtio instance number for multiple drives
     static int _instance;
@@ -157,7 +159,10 @@ private:
     bool _ro;
     // This mutex protects parallel make_request invocations
     mutex _lock;
+
+#ifndef AARCH64_PORT_STUB
     gsi_level_interrupt _gsi;
+#endif /* AARCH64_PORT_STUB */
 };
 
 }
