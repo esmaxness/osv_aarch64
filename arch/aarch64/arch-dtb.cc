@@ -304,3 +304,135 @@ bool dtb_get_gic_v2(u64 *dist, size_t *dist_len, u64 *cpu, size_t *cpu_len)
 
     return true;
 }
+
+/* this gets the PCI configuration space base address */
+size_t dtb_get_pci_cfg(u64 *addr)
+{
+    int node; size_t len;
+
+    if (!dtb)
+        return 0;
+
+    node = fdt_path_offset(dtb, "/pci");
+    if (node < 0)
+        return 0;
+
+    len = dtb_get_reg(node, addr);
+    return len;
+}
+
+/* just get the CPU memory areas for now */
+bool dtb_get_pci_ranges(u64 *addr, size_t *len, int n)
+{
+    u32 addr_cells_pci, addr_cells, size_cells;
+    int node;
+
+    memset(addr, 0, sizeof(u64) * n);
+    memset(len, 0, sizeof(size_t) * n);
+
+    if (!dtb)
+        return false;
+
+    node = fdt_path_offset(dtb, "/pci");
+    if (node < 0)
+        return false;
+
+    if (!dtb_getprop_u32(node, "#address-cells", &addr_cells_pci))
+        return false;
+
+    if (!dtb_getprop_u32_cascade(node, "#address-cells", &addr_cells))
+        return false;
+
+    if (!dtb_getprop_u32_cascade(node, "#size-cells", &size_cells))
+        return false;
+
+    int size;
+    u32 *ranges = (u32 *)fdt_getprop(dtb, node, "ranges", &size);
+    int required = (addr_cells + size_cells) * sizeof(u32) * n;
+
+    if (!ranges || size < required)
+        return false;
+
+    for (int x = 0; x < n; x++) {
+        for (u32 i = 0; i < addr_cells_pci; i++, ranges++) {
+            /* ignore the PCI address */
+        }
+        for (u32 i = 0; i < addr_cells; i++, ranges++) {
+            addr[x] = addr[x] << 32 | fdt32_to_cpu(*ranges);
+        }
+        for (u32 i = 0; i < size_cells; i++, ranges++) {
+            len[x] = len[x] << 32 | fdt32_to_cpu(*ranges);
+        }
+    }
+
+    return true;
+}
+
+/* get the number of mappings between pci devices and platform IRQs. */
+int dtb_get_pci_irqmap_count()
+{
+    if (!dtb)
+        return -1;
+
+    int node = fdt_path_offset(dtb, "/pci");
+    if (node < 0)
+        return -1;
+
+    int size;
+    u32 *prop = (u32 *)fdt_getprop(dtb, node, "interrupt-map", &size);
+
+    /* we require each entry to be 32 bytes, as the exact encoding
+     * is not clear to me at all. */
+    if (!prop || size < 0 || size % 32 != 0) {
+        return -1;
+    } else {
+        return size / 32;
+    }
+}
+
+/* gets the mask for just the slot member of the pci address. */
+u32 dtb_get_pci_irqmask()
+{
+    if (!dtb)
+        return 0;
+
+    int node = fdt_path_offset(dtb, "/pci");
+    if (node < 0)
+        return 0;
+
+    int size;
+    u32 *prop = (u32 *)fdt_getprop(dtb, node, "interrupt-map-mask", &size);
+
+    if (size != 16)
+        return 0;
+
+    /* we only get the slot mask and ignore all the rest */
+    return fdt32_to_cpu(*prop);
+}
+
+bool dtb_get_pci_irqmap(u32 *slots, int *irq_ids, int n)
+{
+    if (!dtb)
+        return false;
+
+    int node = fdt_path_offset(dtb, "/pci");
+    if (node < 0)
+        return -1;
+
+    int size;
+    u32 *prop = (u32 *)fdt_getprop(dtb, node, "interrupt-map", &size);
+
+    /* we require each entry to be 32 bytes, as the exact encoding
+     * is not clear to me at all. */
+    if (!prop || size < 0 || size % 32 != 0 || n > size / 32) {
+        return false;
+    }
+    for (int i = 0; i < n; i++) {
+        slots[i] = fdt32_to_cpu(*prop);
+        prop += 6; /* skip the rest of the address, the parent gic id */
+        irq_ids[i] = fdt32_to_cpu(*prop);
+        prop += 2; /* skip to the next entry */
+    }
+
+    return true;
+}
