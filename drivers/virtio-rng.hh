@@ -33,19 +33,22 @@ public:
 
     virtual size_t get_random_bytes(char* buf, size_t size) override;
 
+    void handle_irq();
+    bool ack_irq();
     static hw_driver* probe(hw_device* dev);
 
 private:
-
-    void handle_irq();
-    bool ack_irq();
     void worker();
     void refill();
 
     static const size_t _pool_size = 64;
     std::vector<char> _entropy;
+
+#ifndef AARCH64_PORT_STUB
     gsi_level_interrupt _gsi;
-    sched::thread _thread;
+#endif /* AARCH64_PORT_STUB */
+
+    sched::thread *_thread;
     condvar _producer;
     condvar _consumer;
     vring* _queue;
