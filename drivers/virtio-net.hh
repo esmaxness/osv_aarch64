@@ -208,6 +208,7 @@ public:
     virtual ~net();
 
     virtual std::string get_name() const { return _driver_name; }
+    sched::thread *get_rxq_poll_thread() { return this->_rxq.poll_task; }
     void read_config();
 
     virtual u32 get_driver_features();
@@ -269,7 +270,9 @@ private:
 
     u32 _hdr_size;
 
+#ifndef AARCH64_PORT_STUB
     gsi_level_interrupt _gsi;
+#endif /* AARCH64_PORT_STUB */
 
     struct rxq_stats {
         u64 rx_packets; /* if_ipackets */
@@ -301,16 +304,12 @@ private:
 
     /* Single Rx queue object */
     struct rxq {
-        rxq(vring* vq, std::function<void ()> poll_func)
-            : vqueue(vq), poll_task(poll_func, sched::thread::attr().
-                                    name("virtio-net-rx")) {};
+        rxq(vring* vq, std::function<void ()> poll_func);
         vring* vqueue;
-        sched::thread  poll_task;
+        sched::thread *poll_task;
         struct rxq_stats stats = { 0 };
 
-        void update_wakeup_stats(const u64 wakeup_packets) {
-            if_update_wakeup_stats(stats.rx_wakeup_stats, wakeup_packets);
-        }
+        void update_wakeup_stats(const u64 wakeup_packets);
     };
 
     /**

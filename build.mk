@@ -402,7 +402,7 @@ ifeq ($(arch),aarch64)
 # to the bootfs.manifest.skel atm to get it to work.
 #
 tools += tests/tst-hello.so
-cmdline = --nomount /tools/uush.so
+cmdline = --nomount --verbose /tools/uush.so
 endif
 
 ifeq ($(arch),x64)
@@ -834,6 +834,7 @@ drivers += drivers/virtio.o
 drivers += drivers/virtio-vring.o
 drivers += drivers/virtio-blk.o
 drivers += drivers/virtio-rng.o
+drivers += drivers/virtio-net.o
 endif # aarch64
 
 objects := bootfs.o
