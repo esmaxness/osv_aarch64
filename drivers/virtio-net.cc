@@ -11,7 +11,10 @@
 #include "drivers/virtio.hh"
 #include "drivers/virtio-net.hh"
 #include "drivers/pci-device.hh"
+
+#ifndef AARCH64_PORT_STUB
 #include <osv/interrupt.hh>
+#endif /* AARCH64_PORT_STUB */
 
 #include <osv/mempool.hh>
 #include <osv/mmu.hh>
@@ -225,12 +228,34 @@ bool net::ack_irq()
 
 }
 
+net::rxq::rxq(vring* vq, std::function<void ()> poll_func)
+{
+    vqueue = vq;
+    poll_task = new sched::thread(poll_func,
+                                  sched::thread::attr().name("virtio-net-rx"));
+}
+
+void net::rxq::update_wakeup_stats(const u64 wakeup_packets)
+{
+    if_update_wakeup_stats(stats.rx_wakeup_stats, wakeup_packets);
+}
+
+#ifdef AARCH64_PORT_STUB
+void net_irq_handler(struct interrupt_desc *desc)
+{
+    net *net = (virtio::net *)desc->obj;
+    if (net->ack_irq()) {
+        net->get_rxq_poll_thread()->wake();
+    }
+}
+#endif /* AARCH64_PORT_STUB */
+
 net::net(pci::device& dev)
     : virtio_driver(dev),
       _rxq(get_virt_queue(0), [this] { this->receiver(); }),
       _txq(this, get_virt_queue(1))
 {
-    sched::thread* poll_task = &_rxq.poll_task;
+    sched::thread* poll_task = _rxq.poll_task;
 
     poll_task->set_priority(sched::thread::priority_infinity);
 
@@ -287,6 +312,10 @@ net::net(pci::device& dev)
 
     ether_ifattach(_ifn, _config.mac);
 
+#ifdef AARCH64_PORT_STUB
+    pci::register_pci_irq(dev, this, &net_irq_handler);
+#else /* !AARCH64_PORT_STUB */
+
     if (dev.is_msix()) {
         _msi.easy_register({
             { 0, [&] { _rxq.vqueue->disable_interrupts(); }, poll_task },
@@ -296,6 +325,7 @@ net::net(pci::device& dev)
         _gsi.set_ack_and_handler(dev.get_interrupt_line(),
             [=] { return this->ack_irq(); }, [=] { poll_task->wake(); });
     }
+#endif /* !AARCH64_PORT_STUB */
 
     fill_rx_ring();
 
