@@ -36,16 +36,35 @@ static int virtio_rng_read(void *buf, int size)
 }
 
 namespace virtio {
-rng::rng(pci::device& pci_dev)
-    : virtio_driver(pci_dev)
-    , _gsi(pci_dev.get_interrupt_line(), [&] { return ack_irq(); }, [&] { handle_irq(); })
-    , _thread([&] { worker(); }, sched::thread::attr().name("virtio-rng"))
+
+#ifdef AARCH64_PORT_STUB
+void rng_irq_handler(struct interrupt_desc *desc)
 {
+    rng *rng = (virtio::rng *)desc->obj;
+    if (rng->ack_irq()) {
+        rng->handle_irq();
+    }
+}
+#endif /* AARCH64_PORT_STUB */
+
+rng::rng(pci::device& pci_dev) : virtio_driver(pci_dev)
+#ifndef AARCH64_PORT_STUB
+    , _gsi(pci_dev.get_interrupt_line(),
+           [&] { return ack_irq(); }, [&] { handle_irq(); })
+#endif /* AARCH64_PORT_STUB */
+{
+    _thread = new sched::thread([this] { this->worker(); },
+                                sched::thread::attr().name("virtio-rng"));
+
+#ifdef AARCH64_PORT_STUB
+    pci::register_pci_irq(pci_dev, this, &rng_irq_handler);
+#endif /* !AARCH64_PORT_STUB */
+
     _queue = get_virt_queue(0);
 
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
-    _thread.start();
+    _thread->start();
 
     s_hwrng = this;
     live_entropy_source_register(&vrng);
@@ -73,7 +92,7 @@ size_t rng::get_random_bytes(char* buf, size_t size)
 
 void rng::handle_irq()
 {
-    _thread.wake();
+    _thread->wake();
 }
 
 bool rng::ack_irq()
