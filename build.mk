@@ -402,7 +402,6 @@ ifeq ($(arch),aarch64)
 # to the bootfs.manifest.skel atm to get it to work.
 #
 tools += tests/tst-hello.so
-cmdline = --nomount --verbose /tools/uush.so
 endif
 
 ifeq ($(arch),x64)
@@ -473,7 +472,7 @@ include $(libfdt_base)/Makefile.libfdt
 libfdt-source := $(patsubst %.c, $(libfdt_base)/%.c, $(LIBFDT_SRCS))
 libfdt = $(patsubst $(src)/%.c, %.o, $(libfdt-source))
 
-all: loader.img
+all: loader.img usr.img
 
 preboot.elf: arch/$(arch)/preboot.ld arch/$(arch)/preboot.o
 	$(call quiet, $(LD) -o $@ -T $^, LD $@)

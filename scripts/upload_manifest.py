@@ -118,7 +118,7 @@ def upload(osv, manifest, depends):
             if not os.path.exists(stripped_filename) \
                     or (os.path.getmtime(stripped_filename) < \
                         os.path.getmtime(filename)):
-                subprocess.call(["strip", "-o", stripped_filename, filename])
+                subprocess.call(["cp", filename, stripped_filename])
         return stripped_filename
 
 

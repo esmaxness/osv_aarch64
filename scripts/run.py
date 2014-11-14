@@ -64,6 +64,8 @@ def set_imgargs(options):
         execute = '--sampler=%d %s' % (int(options.sampler), execute)
 
     cmdline = ["scripts/imgedit.py", "setargs", options.image_file, execute]
+    options.execute = execute
+
     if options.dry_run:
         print(format_args(cmdline))
     else:
@@ -90,10 +92,14 @@ def start_osv_qemu(options):
         cache = 'none' if is_direct_io_supported(options.image_file) else 'unsafe'
 
     args = [
-        "-vnc", options.vnc,
-        "-gdb", "tcp::1234,server,nowait",
+        "-nographic",
+        "-machine", "type=virt",
+        "-cpu", "cortex-a57",
         "-m", options.memsize,
-        "-smp", options.vcpus]
+        "-smp", options.vcpus,
+        "-kernel", "%s/build/%s/loader.img" % (os.getcwd(), options.opt_path),
+        "-append", options.execute
+    ]
 
     if options.graphics:
         args += [
@@ -102,7 +108,7 @@ def start_osv_qemu(options):
     if options.sata:
         args += [
         "-machine", "q35",
-        "-drive", "file=%s,if=none,id=hd0,media=disk,aio=native,cache=%s" % (options.image_file, cache),
+        "-drive", "file=%s,if=none,id=hd0,media=disk" % (options.image_file),
         "-device", "ide-hd,drive=hd0,id=idehd0,bus=ide.0"]
     elif options.scsi:
         args += [
@@ -114,8 +120,8 @@ def start_osv_qemu(options):
         "-hda", options.image_file]
     else:
         args += [
-        "-device", "virtio-blk-pci,id=blk0,bootindex=0,drive=hd0,scsi=off",
-        "-drive", "file=%s,if=none,id=hd0,aio=native,cache=%s" % (options.image_file, cache)]
+        "-device", "virtio-blk-pci,id=blk0,bootindex=0,drive=hd0,scsi=off,vectors=0",
+        "-drive", "file=%s,if=none,id=hd0" % (options.image_file)]
 
     if options.no_shutdown:
         args += ["-no-reboot", "-no-shutdown"]
@@ -159,9 +165,6 @@ def start_osv_qemu(options):
         args += ["-daemonize"]
     else:
         signal_option = ('off', 'on')[options.with_signals]
-        args += ["-chardev", "stdio,mux=on,id=stdio,signal=%s" % signal_option]
-        args += ["-mon", "chardev=stdio,mode=readline,default"]
-        args += ["-device", "isa-serial,chardev=stdio"]
 
     for a in options.pass_args or []:
         args += a.split()
@@ -178,12 +181,13 @@ def start_osv_qemu(options):
         if options.dry_run:
             print(format_args(cmdline))
         else:
+            print(format_args(cmdline))
             subprocess.call(cmdline, env=qemu_env)
     except OSError as e:
         if e.errno == errno.ENOENT:
-            print("'qemu-system-x86_64' binary not found. Please install the qemu-system-x86 package.")
+            print("qemu binary not found.")
         else:
-            print("OS error({0}): \"{1}\" while running qemu-system-x86_64 {2}".
+            print("OS error({0}): \"{1}\" while running qemu {2}".
                 format(e.errno, e.strerror, " ".join(args)))
     finally:
         cleanups()
@@ -365,12 +369,12 @@ def start_osv(options):
         return
 
 def choose_hypervisor(external_networking):
-    if os.path.exists('/dev/kvm'):
-        return 'kvm'
-    if (os.path.exists('/proc/xen/capabilities')
-        and 'control_d' in file('/proc/xen/capabilities').read()
-        and external_networking):
-        return 'xen'
+#    if os.path.exists('/dev/kvm'):
+#        return 'kvm'
+#    if (os.path.exists('/proc/xen/capabilities')
+#        and 'control_d' in file('/proc/xen/capabilities').read()
+#        and external_networking):
+#        return 'xen'
     return 'qemu'
 
 def main(options):
@@ -443,7 +447,7 @@ if __name__ == "__main__":
     parser.add_argument("--sampler", action="store", nargs='?', const='1000',
                         help="start sampling profiler. optionally specify sampling frequency in Hz")
     parser.add_argument("--qemu-path", action="store",
-                        default="qemu-system-x86_64",
+                        default="qemu-system-aarch64",
                         help="specify qemu command path")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release"

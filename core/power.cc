@@ -39,7 +39,12 @@ void halt(void)
 
 void poweroff(void)
 {
-#ifndef AARCH64_PORT_STUB
+#ifdef AARCH64_PORT_STUB
+    // We need to cause something drastic to happen to force QEMU to quit.
+    // Uses special tcg instruction HINT #7
+    asm volatile ("HINT #7\n"); /* poweroff */
+    asm volatile ("HINT #7\n"); /* poweroff */
+#else
     ACPI_STATUS status = AcpiEnterSleepStatePrep(ACPI_STATE_S5);
     if (ACPI_FAILURE(status)) {
         debug("AcpiEnterSleepStatePrep failed: %s\n", AcpiFormatException(status));
@@ -52,7 +57,7 @@ void poweroff(void)
     }
 #endif /* !AARCH64_PORT_STUB */
 
-    // We shouldn't get here on x86.
+    // We shouldn't get here.
     halt();
 }
 
