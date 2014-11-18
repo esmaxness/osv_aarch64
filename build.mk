@@ -1001,18 +1001,13 @@ bare.raw: loader.img
 	$(call quiet, dd if=loader.img of=$@ conv=notrunc > /dev/null 2>&1)
 	$(call quiet, $(src)/scripts/imgedit.py setpartition $@ 2 $(zfs-start) $(zfs-size), IMGEDIT $@)
 
-bare.img: scripts/mkzfs.py $(jni) bare.raw bootfs.manifest
+usr.img: loader.img scripts/mkzfs.py $(jni) bare.raw usr.manifest cmdline
 	$(call quiet, echo Creating $@ as $(img_format))
 	$(call quiet, qemu-img convert -f raw -O $(img_format) bare.raw $@)
 	$(call quiet, qemu-img resize $@ +$(fs_size_mb)M > /dev/null 2>&1)
-	sudo $(src)/scripts/mkzfs.py -o $@ -d $@.d -m bootfs.manifest
-
-usr.img: bare.img usr.manifest cmdline
-	$(call quiet, cp bare.img $@)
-	sudo $(src)/scripts/upload_manifest.py -o $@ -m usr.manifest \
-		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
-		glibcbase=$(glibcbase) -D miscbase=$(miscbase)
+	sudo $(src)/scripts/mkzfs.py -o $@ -d $@.d -m usr.manifest
 	$(call quiet, $(src)/scripts/imgedit.py setargs $@ '$(shell cat cmdline)', IMGEDIT $@)
+	$(call quiet, $(src)/scripts/imgedit.py setargs loader.img '$(shell cat cmdline)', IMGEDIT loader.img)
 
 osv.vmdk osv.vdi:
 	$(call quiet, echo Creating $@ as $(subst osv.,,$@))

@@ -1,10 +1,18 @@
 [manifest]
-/usr/lib/libgcc_s.so.1: %(gccbase)s/lib64/libgcc_s.so.1
-/usr/lib/&/libboost_filesystem.so.1.55.0: %(miscbase)s/usr/lib64/&
-/usr/lib/&/libboost_regex.so: %(miscbase)s/usr/lib64/&
-/&/etc/hosts: ../../static/&
-/etc/mnttab: ->/proc/mounts
-/&/etc/fstab: ../../static/&
+/libuutil.so: libuutil.so
+/zpool.so: zpool.so
+/libzfs.so: libzfs.so
+/zfs.so: zfs.so
+/tools/mkfs.so: tools/mkfs/mkfs.so
+/tools/uush.so: tools/uush/uush.so
+/tools/cpiod.so: tools/cpiod/cpiod.so
+/tests/tst-hello.so: tests/tst-hello.so
+/usr/lib/libgcc_s.so.1: /home/claudio/git/osv/external/aarch64/gcc.bin/lib64/libgcc_s.so.1
+/usr/lib/libboost_filesystem.so.1.55.0: /home/claudio/git/osv/external/aarch64/misc.bin/usr/lib64/libboost_filesystem.so.1.55.0
+/usr/lib/libboost_regex.so: /home/claudio/git/osv/external/aarch64/misc.bin/usr/lib64/libboost_regex.so
+/etc/hosts: ../../static/etc/hosts
+#/etc/mnttab: ->/proc/mounts
+/etc/fstab: ../../static/etc/fstab
 /dev: ../../static
 /proc: ../../static
 /tmp: ../../static
