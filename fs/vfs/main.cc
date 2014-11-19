@@ -2129,9 +2129,11 @@ extern "C" void mount_zfs_rootfs(void)
     if (ret)
         kprintf("failed to mount /zfs, error = %s\n", strerror(ret));
 
+    /*
     ret = sys_pivot_root("/zfs", "/");
     if (ret)
         kprintf("failed to pivot root, error = %s\n", strerror(ret));
+    */
 
     auto ent = setmntent("/etc/fstab", "r");
     if (!ent) {
