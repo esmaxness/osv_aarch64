@@ -1032,6 +1032,10 @@ tools/mkfs/mkfs.so: tools/mkfs/mkfs.o libzfs.so
 
 tools/cpiod/cpiod.so: tools/cpiod/cpiod.o tools/cpiod/cpio.o libzfs.so
 
+zpool.so: libzfs.so
+
+zfs.so: libzfs.so
+
 tools/libtools.so: tools/route/route_info.o tools/ifconfig/network_interface.o
 	 $(call quiet, $(CC) $(CFLAGS) -shared -o tools/libtools.so $^, LINK $@)
 
