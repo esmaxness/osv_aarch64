@@ -19,19 +19,6 @@
 #define LDBL_MIN_EXP (-16381)
 #define LDBL_MAX_EXP 16384
 
-/* XXX HACK XXX */
-/* libc/ math stuff does not handle LDBL_MANT_DIG 113 well:
-   the modules recognize the case and handle it with the same code
-   as LDBL_MANT_DIG=64, but the referenced implementation in
-   __invtrigl.c et al do not provide an implementation for
-   113, so we are left with unresolved symbols.
-
-   So we redefine to 64, which is probably wrong.
- */
-
-#undef LDBL_MANT_DIG
-#define LDBL_MANT_DIG 64
-
 #define LDBL_DIG 33
 #define LDBL_MIN_10_EXP (-4931)
 #define LDBL_MAX_10_EXP 4932
