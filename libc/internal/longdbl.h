@@ -15,15 +15,19 @@ union ldshape {
 		uint16_t pad;
 	} bits;
 };
-#elif LDBL_MANT_DIG == 113 && LDBL_MAX_EXP == 16384
+#elif LDBL_MANT_DIG == 113 && LDBL_MAX_EXP == 16384 && __BYTE_ORDER == __LITTLE_ENDIAN
 union ldshape {
-	long double value;
+	long double f;
 	struct {
-		uint64_t mlo;
-		uint64_t mhi:48;
-		uint16_t exp:15;
-		uint16_t sign:1;
-	} bits;
+		uint64_t lo;
+		uint32_t mid;
+		uint16_t top;
+		uint16_t se;
+	} i;
+	struct {
+		uint64_t lo;
+		uint64_t hi;
+	} i2;
 };
 #else
 #error Unsupported long double representation
