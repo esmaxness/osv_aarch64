@@ -155,7 +155,7 @@ CFLAGS = -std=gnu99 $(COMMON)
 
 # should be limited to files under libc/ eventually
 CFLAGS += -I $(src)/libc/stdio -I $(src)/libc/internal -I  $(src)/libc/arch/$(arch) \
-	-Wno-missing-braces -Wno-parentheses -Wno-unused-but-set-variable
+	-Wno-missing-braces -Wno-parentheses -Wno-unused-but-set-variable -Wno-error=cpp
 
 ASFLAGS = -g $(autodepend) -DASSEMBLY
 
