@@ -23,6 +23,9 @@
 #include "drivers/console.hh"
 #include "drivers/pl011.hh"
 #include "early-console.hh"
+#include <osv/pci.hh>
+
+#include <alloca.h>
 
 void setup_temporary_phys_map()
 {
@@ -74,6 +77,28 @@ void arch_setup_free_memory()
     mmu::linear_map((void *)dist, (mmu::phys)dist, dist_len);
     mmu::linear_map((void *)cpu, (mmu::phys)cpu, cpu_len);
 
+    pci::set_pci_ecam(dtb_get_pci_is_ecam());
+
+    /* linear_map [TTBR0 - PCI config space] */
+    u64 pci_cfg;
+    size_t pci_cfg_len;
+    if (dtb_get_pci_cfg(&pci_cfg, &pci_cfg_len)) {
+        pci::set_pci_cfg_base(pci_cfg);
+    }
+    pci_cfg = pci::get_pci_cfg_base();
+    mmu::linear_map((void *)pci_cfg, (mmu::phys)pci_cfg, pci_cfg_len);
+
+    /* linear_map [TTBR0 - PCI I/O and memory ranges] */
+    u64 ranges[2]; size_t ranges_len[2];
+    if (dtb_get_pci_ranges(ranges, ranges_len, 2)) {
+        pci::set_pci_io_base(ranges[0]);
+        pci::set_pci_mem_base(ranges[1]);
+    }
+    ranges[0] = pci::get_pci_io_base();
+    ranges[1] = pci::get_pci_mem_base();
+    mmu::linear_map((void *)ranges[0], (mmu::phys)ranges[0], ranges_len[0]);
+    mmu::linear_map((void *)ranges[1], (mmu::phys)ranges[1], ranges_len[1]);
+
     mmu::switch_to_runtime_page_tables();
 
     osv::parse_cmdline(cmdline);
@@ -98,8 +123,33 @@ void arch_init_premain()
 {
 }
 
+#include "drivers/driver.hh"
+
 void arch_init_drivers()
 {
+    extern boot_time_chart boot_time;
+
+    int irqmap_count = dtb_get_pci_irqmap_count();
+    if (irqmap_count > 0) {
+        u32 mask = dtb_get_pci_irqmask();
+        u32 *bdfs = (u32 *)alloca(sizeof(u32) * irqmap_count);
+        int *irqs  = (int *)alloca(sizeof(int) * irqmap_count);
+        if (dtb_get_pci_irqmap(bdfs, irqs, irqmap_count)) {
+            pci::set_pci_irqmap(bdfs, irqs, irqmap_count, mask);
+        }
+    }
+
+    pci::dump_pci_irqmap();
+
+    // Enumerate PCI devices
+    pci::pci_device_enumeration();
+    boot_time.event("pci enumerated");
+
+    // Initialize all drivers
+    hw::driver_manager* drvman = hw::driver_manager::instance();
+    boot_time.event("drivers probe");
+    drvman->load_all();
+    drvman->list_drivers();
 }
 
 void arch_init_early_console()
