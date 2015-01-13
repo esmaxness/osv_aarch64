@@ -129,7 +129,9 @@ blk::blk(pci::device& pci_dev)
     t->start();
     auto queue = get_virt_queue(0);
     if (pci_dev.is_msix()) {
+#ifndef AARCH64_PORT_STUB
         _msi.easy_register({ { 0, [=] { queue->disable_interrupts(); }, t } });
+#endif /* AARCH64_PORT_STUB */
     } else {
         _irq = new pci_interrupt(pci_dev, [=] { t->wake(); }, [=] { return ack_irq(); });
     }
