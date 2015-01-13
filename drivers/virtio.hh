@@ -168,7 +168,11 @@ protected:
     void setup_features();
 protected:
     pci::device& _dev;
+
+#ifndef AARCH64_PORT_STUB
     interrupt_manager _msi;
+#endif /* __AARCH64_PORT_STUB__ */
+
     vring* _queues[max_virtqueues_nr];
     u32 _num_queues;
     pci::bar* _bar1;
