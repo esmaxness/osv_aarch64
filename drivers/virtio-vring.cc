@@ -14,7 +14,11 @@
 #include <osv/debug.hh>
 
 #include <osv/sched.hh>
+
+#ifndef AARCH64_PORT_STUB
 #include <osv/interrupt.hh>
+#endif /* AARCH64_PORT_STUB */
+
 #include "osv/trace.hh"
 #include <osv/ilog2.hh>
 
