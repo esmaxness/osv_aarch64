@@ -40,7 +40,7 @@ rng::rng(pci::device& pci_dev)
     : virtio_driver(pci_dev)
     , _thread([&] { worker(); }, sched::thread::attr().name("virtio-rng"))
 {
-    _irq = new gsi_level_interrupt(pci_dev.get_interrupt_line(), [&] { handle_irq(); }, [&] { return ack_irq(); });
+    _irq = new pci_interrupt(pci_dev, [&] { handle_irq(); }, [&] { return ack_irq(); });
     _queue = get_virt_queue(0);
 
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);

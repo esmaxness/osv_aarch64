@@ -800,14 +800,15 @@ drivers += java/jni_helpers.o
 drivers += drivers/random.o
 drivers += drivers/zfs.o
 drivers += drivers/null.o
+drivers += drivers/device.o
+drivers += drivers/pci-generic.o
+drivers += drivers/pci-device.o drivers/pci-function.o drivers/pci-bridge.o
+drivers += drivers/driver.o
 
 ifeq ($(arch),x64)
 drivers += $(libtsm)
 drivers += drivers/vga.o drivers/kbd.o drivers/isa-serial.o
 drivers += arch/$(arch)/pvclock-abi.o
-drivers += drivers/device.o
-drivers += drivers/pci-device.o drivers/pci-function.o drivers/pci-bridge.o
-drivers += drivers/driver.o
 drivers += drivers/virtio.o
 drivers += drivers/virtio-vring.o
 drivers += drivers/virtio-net.o
@@ -824,7 +825,6 @@ drivers += drivers/xenfront.o drivers/xenfront-xenbus.o drivers/xenfront-blk.o
 drivers += drivers/pvpanic.o
 drivers += drivers/ahci.o
 drivers += drivers/ide.o
-drivers += drivers/pci-generic.o
 drivers += drivers/scsi-common.o
 drivers += drivers/vmw-pvscsi.o
 endif # x64
@@ -851,10 +851,7 @@ objects += arch/$(arch)/cpuid.o
 objects += arch/$(arch)/firmware.o
 objects += arch/$(arch)/hypervisor.o
 objects += arch/$(arch)/interrupt.o
-
-ifeq ($(arch),x64)
 objects += arch/$(arch)/pci.o
-endif # x64
 
 arch/x64/string-ssse3.o: CXXFLAGS += -mssse3
 

@@ -164,7 +164,7 @@ scsi::scsi(pci::device& dev)
                 { VIRTIO_SCSI_QUEUE_REQ, [=] { queue->disable_interrupts(); }, t },
         });
     } else {
-        _irq = new gsi_level_interrupt(dev.get_interrupt_line(), [=] { t->wake(); }, [=] { return this->ack_irq(); });
+        _irq = new pci_interrupt(dev, [=] { t->wake(); }, [=] { return this->ack_irq(); });
     }
 
     // Enable indirect descriptor
