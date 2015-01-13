@@ -11,7 +11,10 @@
 #include "drivers/virtio.hh"
 #include "drivers/virtio-blk.hh"
 #include "drivers/pci-device.hh"
+
+#ifndef AARCH64_PORT_STUB
 #include <osv/interrupt.hh>
+#endif /* AARCH64_PORT_STUB */
 
 #include <osv/mempool.hh>
 #include <osv/mmu.hh>
@@ -112,6 +115,19 @@ bool blk::ack_irq()
 
 }
 
+#ifdef AARCH64_PORT_STUB
+static bool blk_irq_handler(void *obj)
+{
+    blk *blk = (virtio::blk *)obj;
+    if (blk->ack_irq()) {
+        sched::thread *t = blk->get_thread();
+        t->wake();
+        return true;
+    }
+    return false;
+}
+#endif /* AARCH64_PORT_STUB */
+
 blk::blk(pci::device& pci_dev)
     : virtio_driver(pci_dev), _ro(false)
 {
@@ -124,15 +140,24 @@ blk::blk(pci::device& pci_dev)
     read_config();
 
     //register the single irq callback for the block
-    sched::thread* t = new sched::thread([this] { this->req_done(); },
-            sched::thread::attr().name("virtio-blk"));
-    t->start();
+    _thread = new sched::thread([this] { this->req_done(); },
+        sched::thread::attr().name("virtio-blk"));
+    _thread->start();
     auto queue = get_virt_queue(0);
+
+#ifdef AARCH64_PORT_STUB
+    pci::register_pci_irq(pci_dev, this, &blk_irq_handler);
+#else /* !AARCH64_PORT_STUB */
+
     if (pci_dev.is_msix()) {
-        _msi.easy_register({ { 0, [=] { queue->disable_interrupts(); }, t } });
+        _msi.easy_register({
+                { 0, [=] { queue->disable_interrupts(); }, _thread }
+        });
     } else {
-        _gsi.set_ack_and_handler(pci_dev.get_interrupt_line(), [=] { return this->ack_irq(); }, [=] { t->wake(); });
+        _gsi.set_ack_and_handler(pci_dev.get_interrupt_line(),
+            [=] { return this->ack_irq(); }, [=] { _thread->wake(); });
     }
+#endif /* AARCH64_PORT_STUB */
 
     // Enable indirect descriptor
     queue->set_use_indirect(true);
