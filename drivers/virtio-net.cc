@@ -289,10 +289,12 @@ net::net(pci::device& dev)
     ether_ifattach(_ifn, _config.mac);
 
     if (dev.is_msix()) {
+#ifndef AARCH64_PORT_STUB
         _msi.easy_register({
             { 0, [&] { _rxq.vqueue->disable_interrupts(); }, poll_task },
             { 1, [&] { _txq.vqueue->disable_interrupts(); }, nullptr }
         });
+#endif /* AARCH64_PORT_STUB */
     } else {
         _irq = new pci_interrupt(dev, [=] { poll_task->wake(); }, [=] { return this->ack_irq(); });
     }
