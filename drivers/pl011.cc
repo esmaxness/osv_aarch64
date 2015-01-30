@@ -25,6 +25,11 @@ void PL011_Console::set_base_addr(u64 addr)
     uart = (char *)addr;
 }
 
+void PL011_Console::set_irqid(int irqid)
+{
+    this->irqid = irqid;
+}
+
 u64 PL011_Console::get_base_addr()
 {
     return (u64)uart;
@@ -54,8 +59,6 @@ bool PL011_Console::irq_handler(void *obj) {
 void PL011_Console::dev_start() {
     /* trigger interrupt on Receive */
     uart[UARTIMSC] = 0x10; /* UARTRXINTR */
-
-    this->irqid = 33; /* UART irq = SPI 1 = 32 + 1 */
     idt.register_handler(this, this->irqid, &PL011_Console::irq_handler,
                          gic::irq_type::IRQ_TYPE_EDGE);
     idt.enable_irq(this->irqid);
