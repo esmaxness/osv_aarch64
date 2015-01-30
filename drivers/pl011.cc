@@ -17,6 +17,7 @@ enum {
     UARTDR    = 0x000,
     UARTFR    = 0x018,
     UARTIMSC  = 0x038,
+    UARTMIS   = 0x040,
     UARTICR   = 0x044
 };
 
@@ -50,10 +51,16 @@ char PL011_Console::readch() {
 
 bool PL011_Console::irq_handler(void *obj) {
     PL011_Console *that = (PL011_Console *)obj;
-    /* Interrupt Clear Register, clear UARTRXINTR */
-    uart[UARTICR] = 0x10;
-    that->_thread->wake();
-    return true;
+
+    /* check Masked Interrupt Status Register for UARTRXINTR */
+    if (uart[UARTMIS] & 0x10) {
+        /* Interrupt Clear Register, clear UARTRXINTR */
+        uart[UARTICR] = 0x10;
+        that->_thread->wake();
+        return true;
+    }
+
+    return false;
 }
 
 void PL011_Console::dev_start() {
