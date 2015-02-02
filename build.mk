@@ -1,4 +1,9 @@
-detect_arch=$(shell echo $(1) | $(CC) -E -xc - | tail -n 1)
+HOST_CXX=g++
+HOST_CC=gcc
+HOST_LD=ld
+HOST_AR=ar
+
+detect_arch=$(shell echo $(1) | $(HOST_CC) -E -xc - | tail -n 1)
 
 ifeq ($(call detect_arch, __x86_64__),1)
     host_arch = x64
@@ -37,7 +42,6 @@ $(info build.mk:)
 
 CROSS_PREFIX = $(if $(filter-out $(arch), $(host_arch)), $(arch)-linux-gnu-)
 
-HOST_CXX=g++
 CXX=$(CROSS_PREFIX)g++
 CC=$(CROSS_PREFIX)gcc
 LD=$(CROSS_PREFIX)ld
@@ -181,8 +185,14 @@ very-quiet = $(if $V, $1, @$1)
 makedir = $(call very-quiet, mkdir -p $(dir $@))
 build-cxx = $(CXX) $(CXXFLAGS) -c -o $@ $<
 q-build-cxx = $(call quiet, $(build-cxx), CXX $@)
+build-cxx-host = $(HOST_CXX) $(HOST_CXXFLAGS) -c -o $@ $<
+q-build-cxx-host = $(call quiet, $(build-cxx-host), HOST_CXX $@)
+
 build-c = $(CC) $(CFLAGS) -c -o $@ $<
 q-build-c = $(call quiet, $(build-c), CC $@)
+build-c-host = $(HOST_CC) $(HOST_CFLAGS) -c -o $@ $<
+q-build-c-host = $(call quiet, $(build-c-host), HOST_CC $@)
+
 build-s = $(CXX) $(CXXFLAGS) $(ASFLAGS) -c -o $@ $<
 q-build-s = $(call quiet, $(build-s), AS $@)
 build-so = $(CC) $(CFLAGS) -o $@ $^ $(EXTRA_LIBS)
@@ -218,6 +228,11 @@ tests/%.o: COMMON += -fPIC -DBOOST_TEST_DYN_LINK
 %.so: %.o
 	$(makedir)
 	$(q-build-so)
+
+buildtools: zfs-tool
+.PHONY: buildtools
+
+include $(src)/buildtools/build.mk
 
 sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
 autodepend = -MD -MT $@ -MP
@@ -475,7 +490,7 @@ include $(libfdt_base)/Makefile.libfdt
 libfdt-source := $(patsubst %.c, $(libfdt_base)/%.c, $(LIBFDT_SRCS))
 libfdt = $(patsubst $(src)/%.c, %.o, $(libfdt-source))
 
-all: loader.img
+all: loader.img buildtools
 
 preboot.elf: arch/$(arch)/preboot.ld arch/$(arch)/preboot.o
 	$(call quiet, $(LD) -o $@ -T $^, LD $@)
@@ -493,7 +508,6 @@ loader.img: preboot.bin loader-stripped.elf
 	$(call quiet, dd if=preboot.bin of=$@ > /dev/null 2>&1, DD $@ preboot.bin)
 	$(call quiet, dd if=loader-stripped.elf of=$@ conv=notrunc obs=4096 seek=16 > /dev/null 2>&1, DD $@ loader-stripped.elf)
 	$(call quiet, $(src)/scripts/imgedit.py setargs $@ $(cmdline), IMGEDIT $@)
-
 endif # aarch64
 
 bsd/sys/crypto/sha2/sha2.o: CFLAGS+=-Wno-strict-aliasing

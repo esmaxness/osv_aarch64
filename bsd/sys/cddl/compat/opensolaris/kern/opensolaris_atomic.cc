@@ -24,6 +24,7 @@
  * SUCH DAMAGE.
  */
 
+#include <stdint.h>
 #include <sys/cdefs.h>
 #include <bsd/sys/cddl/compat/opensolaris/sys/atomic.h>
 #include <atomic>
@@ -33,6 +34,36 @@ inline
 volatile std::atomic<T>* as_atomic(volatile T* p)
 {
     return reinterpret_cast<volatile std::atomic<T>*>(p);
+}
+
+void
+atomic_inc_64(volatile uint64_t *target)
+{
+    as_atomic(target)->fetch_add(1, std::memory_order_relaxed);
+}
+
+void
+atomic_inc_32(volatile uint32_t *target)
+{
+    as_atomic(target)->fetch_add(1, std::memory_order_relaxed);
+}
+
+void
+atomic_dec_64(volatile uint64_t *target)
+{
+    as_atomic(target)->fetch_sub(1, std::memory_order_relaxed);
+}
+
+void
+atomic_dec_32(volatile uint32_t *target)
+{
+    as_atomic(target)->fetch_sub(1, std::memory_order_relaxed);
+}
+
+uint32_t
+atomic_dec_32_nv(volatile uint32_t *target)
+{
+    return as_atomic(target)->fetch_sub(1, std::memory_order_relaxed) - 1;
 }
 
 void
@@ -47,15 +78,17 @@ atomic_add_64_nv(volatile uint64_t *target, int64_t delta)
     return as_atomic(target)->fetch_add(delta, std::memory_order_relaxed) + delta;
 }
 
-#if defined(__powerpc__) || defined(__arm__) || defined(__mips__)
 void
-atomic_or_8(volatile uint8_t *target, uint8_t value)
+atomic_add_32(volatile uint32_t *target, int32_t delta)
 {
-	mtx_lock(&atomic_mtx);
-	*target |= value;
-	mtx_unlock(&atomic_mtx);
+    as_atomic(target)->fetch_add(delta, std::memory_order_relaxed);
 }
-#endif
+
+uint32_t
+atomic_add_32_nv(volatile uint32_t *target, int32_t delta)
+{
+    return as_atomic(target)->fetch_add(delta, std::memory_order_relaxed) + delta;
+}
 
 uint8_t
 atomic_or_8_nv(volatile uint8_t *target, uint8_t value)
@@ -68,6 +101,13 @@ atomic_cas_64(volatile uint64_t *target, uint64_t cmp, uint64_t newval)
 {
     as_atomic(target)->compare_exchange_strong(cmp, newval, std::memory_order_relaxed);
     return cmp;
+}
+
+void *
+atomic_cas_ptr(volatile void *target, void *cmp, void *newval)
+{
+    return (void *)atomic_cas_64((volatile uint64_t *)target, (uint64_t)cmp,
+                                 (uint64_t)newval);
 }
 
 uint32_t

@@ -21,6 +21,9 @@
 /*
  * Copyright 2009 Sun Microsystems, Inc.  All rights reserved.
  * Use is subject to license terms.
+ *
+ * Renamed 2015 Huawei Technologies Duesseldorf GmbH
+ * renamed from tasq.c -> tasq.c.bak to avoid building this
  */
 
 #include <sys/zfs_context.h>

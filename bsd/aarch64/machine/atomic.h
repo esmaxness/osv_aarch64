@@ -271,7 +271,7 @@ u_long	atomic_readandclear_long(volatile u_long *addr);
 #define	atomic_clear_32		atomic_clear_int
 #define	atomic_clear_acq_32	atomic_clear_acq_int
 #define	atomic_clear_rel_32	atomic_clear_rel_int
-#define	atomic_add_32		atomic_add_int
+/* #define	atomic_add_32		atomic_add_int */
 #define	atomic_add_acq_32	atomic_add_acq_int
 #define	atomic_add_rel_32	atomic_add_rel_int
 #define	atomic_subtract_32	atomic_subtract_int
@@ -292,7 +292,7 @@ u_long	atomic_readandclear_long(volatile u_long *addr);
 #define	atomic_clear_64		atomic_clear_long
 #define	atomic_clear_acq_64	atomic_clear_acq_long
 #define	atomic_clear_rel_64	atomic_clear_rel_long
-#define	atomic_add_64		atomic_add_long
+/* #define	atomic_add_64		atomic_add_long */
 #define	atomic_add_acq_64	atomic_add_acq_long
 #define	atomic_add_rel_64	atomic_add_rel_long
 #define	atomic_subtract_64	atomic_subtract_long
