@@ -7,3 +7,6 @@ ccflags = Split('-D_KERNEL')
 libs = Split('rt pthread fuse dl z aio')
 
 env.Program('zfs-fuse', objects, CPPPATH = env['CPPPATH'] + cpppath, LIBS = libs, CCFLAGS = env['CCFLAGS'] + ccflags)
+
+objects = Split('zfs-userspace.c cmd_listener.c ptrace.c util.c zfs_acl.c zfs_dir.c zfs_ioctl.c zfs_log.c zfs_replay.c zfs_rlock.c zfs_vfsops.c zfs_vnops.c zvol.c fuse_listener.c zfsfuse_socket.c zfs_operations.c #lib/libzpool/libzpool-kernel.a #lib/libzfscommon/libzfscommon-kernel.a #lib/libnvpair/libnvpair-kernel.a #lib/libavl/libavl.a #lib/libumem/libumem.a #lib/libsolkerncompat/libsolkerncompat.a')
+env.Program('zfs-userspace', objects, CPPPATH = env['CPPPATH'] + cpppath, LIBS = libs, CCFLAGS = env['CCFLAGS'] + ccflags)

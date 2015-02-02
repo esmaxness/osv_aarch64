@@ -1,0 +1,65 @@
+.TH zfs-userspace 8 "2015 JAN 30" "ZFS-FUSE"
+
+.SH NAME
+zfs-userspace \- Read and copy files from(to) ZFS volumes offline.
+
+.SH SYNOPSIS
+.LP
+
+.nf
+\fBzfs-userspace\fR [\fB-r\fR | \fB-w\fR] [\fB-i\fR | \fB--input-file\fR \fIPATHNAME\fR] [\fB-o\fR | \fB--output-file\fR \fIPATHNAME\fR] [\fB-m\fR |\fB--mount-point\fR \fIPATHNAME\fR] \fIvolume\fR
+.fi
+
+
+.SH DESCRIPTION
+.LP
+\fBzfs-userspace\fR is an utility to operate with ZFS volumes "offline",
+that is without any service of kernel ZFS and FUSE modules.
+The following operations are currently supported:
+
+1) Read a file. This operation reads a specified input file of zfs volume to standard output;
+
+2) Copy a file. This operation copies the input file to the specified location (output file) on ZFS volume.
+
+
+.SH OPTIONS
+.TP
+\fB\-m\fR | \fB--mount-point\fR <PATHNAME>
+Mount point that was specified at pool creation time.
+
+.TP
+\fB\-i\fR | \fB--input-file\fR <PATHNAME>
+Specifies the input file to read or copy from.
+
+.TP
+\fB\-o\fR | \fB--output-file\fR <PATHNAME>
+Specifies the output file on ZFS volume (for copy operation).
+
+.TP
+\fB\-r\fR | \fB\--read\fR
+Specifies read operation.
+
+.TP
+\fB\-w\fR | \fB\--write\fR
+Specifies copy operation.
+
+
+.SH "NOTES"
+.LP
+
+This utility can not create directories and can not traverse semantic trees on ZFS volumes.
+So, all input files of ZFS volumes should be in root directories. Respectively, all output
+files will be created only in root directories. In particular, all files of ZFS volumes
+should be specified by short (relative) names.
+
+.SH "BUGS"
+.LP
+If there is a running zfs-fuse daemon in the system, then copy operation won't make any effect.
+
+.SH "AUTHORS"
+.LP
+Edward Shishkin <edward.shishkin@gmail.com>.
+
+.SH "SEE ALSO"
+.BR zpool (8),
+.BR zfs (8).

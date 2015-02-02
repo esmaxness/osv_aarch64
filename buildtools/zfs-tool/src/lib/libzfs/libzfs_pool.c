@@ -22,6 +22,9 @@
 /*
  * Copyright 2009 Sun Microsystems, Inc.  All rights reserved.
  * Use is subject to license terms.
+ *
+ * Modified 2015 by Eduard Shishkin <eduard.shishkin@huawei.com>
+ * : added #include <sys/stat.h>
  */
 
 #include <alloca.h>
@@ -31,6 +34,7 @@
 #include <devid.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <libintl.h>
 #include <stdio.h>
 #include <stdlib.h>
