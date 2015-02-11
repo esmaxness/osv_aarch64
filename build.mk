@@ -426,7 +426,7 @@ ifeq ($(arch),x64)
 
 kernel_base := 0x200000
 
-all: loader.img loader.bin usr.img
+all: buildtools loader.img loader.bin usr.img
 
 boot.bin: arch/x64/boot16.ld arch/x64/boot16.o
 	$(call quiet, $(LD) -o $@ -T $^, LD $@)
@@ -490,7 +490,7 @@ include $(libfdt_base)/Makefile.libfdt
 libfdt-source := $(patsubst %.c, $(libfdt_base)/%.c, $(LIBFDT_SRCS))
 libfdt = $(patsubst $(src)/%.c, %.o, $(libfdt-source))
 
-all: loader.img buildtools
+all: buildtools loader.img
 
 preboot.elf: arch/$(arch)/preboot.ld arch/$(arch)/preboot.o
 	$(call quiet, $(LD) -o $@ -T $^, LD $@)
