@@ -158,12 +158,9 @@ gsi_level_interrupt *xen_set_callback(int irqno)
         abort();
     }
 
-    auto gsi = new gsi_level_interrupt(
-        irqno,
-        [] { return xen_ack_irq(); },
-        [] { xen_handle_irq(); }
-    );
-
+    auto gsi = new gsi_level_interrupt(irqno,
+                                       [] { xen_handle_irq(); },
+                                       [] { return xen_ack_irq(); });
     xhp.value = irqno;
 
     if (hvm_hypercall(HVMOP_set_param, &xhp))

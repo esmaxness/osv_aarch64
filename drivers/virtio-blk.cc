@@ -113,7 +113,7 @@ bool blk::ack_irq()
 }
 
 blk::blk(pci::device& pci_dev)
-    : virtio_driver(pci_dev), _ro(false)
+    : virtio_driver(pci_dev), _ro(false), _irq(nullptr)
 {
 
     _driver_name = "virtio-blk";
@@ -131,7 +131,7 @@ blk::blk(pci::device& pci_dev)
     if (pci_dev.is_msix()) {
         _msi.easy_register({ { 0, [=] { queue->disable_interrupts(); }, t } });
     } else {
-        _gsi.set_ack_and_handler(pci_dev.get_interrupt_line(), [=] { return this->ack_irq(); }, [=] { t->wake(); });
+        _irq = new gsi_level_interrupt(pci_dev.get_interrupt_line(), [=] { t->wake(); }, [=] { return ack_irq(); });
     }
 
     // Enable indirect descriptor
@@ -157,6 +157,9 @@ blk::~blk()
 {
     //TODO: In theory maintain the list of free instances and gc it
     // including the thread objects and their stack
+    if (_irq) {
+        delete _irq;
+    }
 }
 
 void blk::read_config()

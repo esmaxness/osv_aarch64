@@ -121,4 +121,10 @@ void isa_serial_console::dev_start() {
     enable_interrupt();
 }
 
+isa_serial_console::~isa_serial_console() {
+    if (_irq) {
+        delete _irq;
+    }
+}
+
 }

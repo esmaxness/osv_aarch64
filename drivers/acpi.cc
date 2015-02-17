@@ -226,14 +226,15 @@ public:
         , _stopped(false)
         , _counter(0)
         , _thread([this] { process_interrupts(); })
-        , _intr(gsi, [this] { _counter.fetch_add(1); _thread.wake(); })
     {
+        _intr = new gsi_edge_interrupt(gsi, [this] { _counter.fetch_add(1); _thread.wake(); });
         _thread.start();
     }
     ~acpi_interrupt() {
         _stopped.store(true);
         _thread.wake();
         _thread.join();
+        delete _intr;
     }
 private:
     void process_interrupts() {
@@ -254,7 +255,7 @@ private:
     std::atomic<bool> _stopped;
     std::atomic<uint64_t> _counter;
     sched::thread _thread;
-    gsi_edge_interrupt _intr;
+    gsi_edge_interrupt *_intr;
 };
 
 std::map<UINT32, std::unique_ptr<acpi_interrupt>> acpi_interrupts;

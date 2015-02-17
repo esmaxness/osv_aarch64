@@ -142,7 +142,7 @@ bool scsi::ack_irq()
 }
 
 scsi::scsi(pci::device& dev)
-    : virtio_driver(dev)
+    : virtio_driver(dev), _irq(nullptr)
 {
 
     _driver_name = "virtio-scsi";
@@ -164,7 +164,7 @@ scsi::scsi(pci::device& dev)
                 { VIRTIO_SCSI_QUEUE_REQ, [=] { queue->disable_interrupts(); }, t },
         });
     } else {
-        _gsi.set_ack_and_handler(dev.get_interrupt_line(), [=] { return this->ack_irq(); }, [=] { t->wake(); });
+        _irq = new gsi_level_interrupt(dev.get_interrupt_line(), [=] { t->wake(); }, [=] { return this->ack_irq(); });
     }
 
     // Enable indirect descriptor
@@ -177,7 +177,10 @@ scsi::scsi(pci::device& dev)
 
 scsi::~scsi()
 {
-    // TODO: cleanup resouces
+    if (_irq) {
+        delete _irq;
+    }
+    // TODO: cleanup other resources
 }
 
 void scsi::read_config()

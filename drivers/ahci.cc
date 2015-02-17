@@ -443,12 +443,13 @@ void hba::enable_irq()
     if (_pci_dev.is_msix() || _pci_dev.is_msi() ) {
         _msi.easy_register({ { 0, [=] { ack_irq(); }, nullptr} });
     } else {
-        _gsi.set_ack_and_handler(_pci_dev.get_interrupt_line(), [=] { return ack_irq(); }, [] {});
+        _gsi = new gsi_level_interrupt(_pci_dev.get_interrupt_line(), [] {}, [=] { return ack_irq(); });
     }
 }
 
 hba::hba(pci::device& pci_dev)
     : hw_driver()
+    , _gsi(nullptr)
     , _pci_dev(pci_dev)
     , _msi(&pci_dev)
 {
@@ -467,6 +468,9 @@ hba::~hba()
     for (auto it : this->_all_ports) {
         auto port = it.second;
         delete port;
+    }
+    if (_gsi) {
+        delete _gsi;
     }
 }
 

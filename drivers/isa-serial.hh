@@ -17,6 +17,8 @@ namespace console {
 
 class isa_serial_console : public console_driver {
 public:
+    isa_serial_console() : _irq(nullptr) {};
+    ~isa_serial_console();
     static void early_init();
     virtual void write(const char *str, size_t len);
     virtual void flush() {}

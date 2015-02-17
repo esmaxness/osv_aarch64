@@ -227,6 +227,7 @@ bool net::ack_irq()
 
 net::net(pci::device& dev)
     : virtio_driver(dev),
+      _irq(nullptr),
       _rxq(get_virt_queue(0), [this] { this->receiver(); }),
       _txq(this, get_virt_queue(1))
 {
@@ -293,8 +294,7 @@ net::net(pci::device& dev)
             { 1, [&] { _txq.vqueue->disable_interrupts(); }, nullptr }
         });
     } else {
-        _gsi.set_ack_and_handler(dev.get_interrupt_line(),
-            [=] { return this->ack_irq(); }, [=] { poll_task->wake(); });
+        _irq = new gsi_level_interrupt(dev.get_interrupt_line(), [=] { poll_task->wake(); }, [=] { return this->ack_irq(); });
     }
 
     fill_rx_ring();
@@ -315,6 +315,9 @@ net::~net()
 
     ether_ifdetach(_ifn);
     if_free(_ifn);
+    if (_irq) {
+        delete _irq;
+    }
 }
 
 void net::read_config()

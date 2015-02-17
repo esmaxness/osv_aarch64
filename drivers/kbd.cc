@@ -81,8 +81,9 @@ static uint32_t ctlmap[256] =
 };
 
 Keyboard::Keyboard(sched::thread* poll_thread)
-    : _irq(1, [=] { poll_thread->wake(); })
 {
+  _irq = new gsi_edge_interrupt(1, [=] { poll_thread->wake(); });
+
   shiftcode[0x1D] = MOD_CTL;
   shiftcode[0x2A] = MOD_SHIFT;
   shiftcode[0x36] = MOD_SHIFT;
@@ -117,6 +118,11 @@ Keyboard::Keyboard(sched::thread* poll_thread)
   ctlmap[0xCB] = KEY_Left;    ctlmap[0xCD] = KEY_Right;
   ctlmap[0x97] = KEY_Home;  ctlmap[0xCF] = KEY_End;
   ctlmap[0xD2] = KEY_Insert;   ctlmap[0xD3] = KEY_Delete;
+}
+
+Keyboard::~Keyboard()
+{
+    delete _irq;
 }
 
 bool Keyboard::input_ready()

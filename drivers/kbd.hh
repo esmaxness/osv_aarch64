@@ -38,11 +38,12 @@ enum special_keycode {
 class Keyboard {
 public:
     explicit Keyboard(sched::thread* consumer);
+    ~Keyboard();
     virtual bool input_ready();
     virtual uint32_t readkey();
     uint32_t shift = 0;
 private:
-    gsi_edge_interrupt _irq;
+    gsi_edge_interrupt *_irq;
 };
 
 #endif

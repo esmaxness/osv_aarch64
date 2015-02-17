@@ -38,9 +38,9 @@ static int virtio_rng_read(void *buf, int size)
 namespace virtio {
 rng::rng(pci::device& pci_dev)
     : virtio_driver(pci_dev)
-    , _gsi(pci_dev.get_interrupt_line(), [&] { return ack_irq(); }, [&] { handle_irq(); })
     , _thread([&] { worker(); }, sched::thread::attr().name("virtio-rng"))
 {
+    _irq = new gsi_level_interrupt(pci_dev.get_interrupt_line(), [&] { handle_irq(); }, [&] { return ack_irq(); });
     _queue = get_virt_queue(0);
 
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
@@ -55,6 +55,7 @@ rng::~rng()
 {
     live_entropy_source_deregister(&vrng);
     s_hwrng = nullptr;
+    delete _irq;
 }
 
 size_t rng::get_random_bytes(char* buf, size_t size)
