@@ -851,6 +851,7 @@ objects += arch/$(arch)/cpuid.o
 objects += arch/$(arch)/firmware.o
 objects += arch/$(arch)/hypervisor.o
 objects += arch/$(arch)/interrupt.o
+objects += arch/$(arch)/msi.o
 
 ifeq ($(arch),x64)
 objects += arch/$(arch)/pci.o
