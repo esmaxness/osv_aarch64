@@ -3,7 +3,13 @@
 # Relaxing alignment checks via sctlr_el1 A bit setting should solve
 # but it doesn't - setting ignored?
 #
-# Also, mixed TLS models resulted in different var addresses seen by
-# different objects depending on the TLS model used.
-# Force all __thread variables encountered to local exec.
-arch-cflags = -mstrict-align -mtls-dialect=desc -ftls-model=local-exec -DAARCH64_PORT_STUB
+# TLS notes:
+# for the kernel image itself, TLS seems to work, including with
+# mixed tls models [local-exec, initial-exec, global-dynamic, local-dynamic]
+#
+# For dynamic libraries linked in at runtime, _nothing_ works.
+#
+# For testing purposes, you might want to force -mtls-model=[model]
+# here to have all objects use the specified model.
+
+arch-cflags = -mstrict-align -mtls-dialect=desc -DAARCH64_PORT_STUB

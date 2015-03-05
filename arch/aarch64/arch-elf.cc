@@ -6,6 +6,7 @@
  */
 
 #include <osv/elf.hh>
+#include "arch-tls.hh"
 
 namespace elf {
 
@@ -20,7 +21,9 @@ bool arch_init_reloc_dyn(struct init_table *t, u32 type, u32 sym,
         *static_cast<u64*>(addr) = t->dyn_tabs.lookup(sym)->st_value + addend;
         break;
     case R_AARCH64_TLS_TPREL64:
-        *static_cast<u64*>(addr) = t->dyn_tabs.lookup(sym)->st_value + addend;
+        debug_early_u64("arch_init_reloc_dyn: TLS_TPREL64 sym=", (u64)sym);
+        *static_cast<u64*>(addr) = t->dyn_tabs.lookup(sym)->st_value + addend
+            + sizeof(struct thread_control_block);
         break;
     default:
         return false;
@@ -49,7 +52,14 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
         *static_cast<void**>(addr) = _base + addend;
         break;
     case R_AARCH64_TLS_TPREL64:
-        *static_cast<void**>(addr) = symbol(sym).relocated_addr() + addend;
+        debug_early_u64("arch_relocate_rela: TLS_TPREL64 sym=", (u64)sym);
+        if (sym) {
+            *static_cast<void**>(addr) = symbol(sym).relocated_addr() + addend
+                + sizeof(struct thread_control_block);
+        } else {
+            *static_cast<void**>(addr) = _base + addend
+                + sizeof(struct thread_control_block);
+        }
         break;
     default:
         return false;
