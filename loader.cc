@@ -538,7 +538,6 @@ void main_cont(int ac, char** av)
     std::tie(ac, av) = parse_options(ac, av);
 
     setenv("OSV_VERSION", osv::version().c_str(), 1);
-
     smp_launch();
     setenv("OSV_CPUS", std::to_string(sched::cpus.size()).c_str(), 1);
     boot_time.event("SMP launched");
