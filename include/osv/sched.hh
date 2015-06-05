@@ -159,10 +159,13 @@ private:
 
 class timer_base {
 public:
+    unsigned int random_value = 0x12345678;
+
     bi::list_member_hook<> hook;
     bi::list_member_hook<> client_hook;
     using client_list_t = bi::list<timer_base,
         bi::member_hook<timer_base, bi::list_member_hook<>, &timer_base::client_hook>>;
+
 public:
     class client {
     public:
@@ -170,6 +173,7 @@ public:
         virtual void timer_fired() = 0;
         void suspend_timers();
         void resume_timers();
+        unsigned int random_value = 0x12345678;
     private:
         bool _timers_need_reload = false;
         client_list_t _active_timers;
@@ -178,7 +182,7 @@ public:
 public:
     explicit timer_base(client& t);
     ~timer_base();
-    void set(osv::clock::uptime::time_point time);
+    void __attribute__((noinline)) set(osv::clock::uptime::time_point time);
     void reset(osv::clock::uptime::time_point time);
     // Set a timer using absolute wall-clock time.
     // CAVEAT EMPTOR: Internally timers are kept using the monotonic (uptime)
@@ -202,10 +206,12 @@ public:
     bool expired() const;
     void cancel();
     friend bool operator<(const timer_base& t1, const timer_base& t2);
+
+    client& _t;
+
 private:
     void expire();
 protected:
-    client& _t;
     enum class state {
         free, armed, expired
     };
