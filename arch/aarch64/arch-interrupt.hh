@@ -13,7 +13,16 @@
 
 #include <functional>
 
-/* Software-Generated Interrupts: not used yet */
+/* Software-Generated Interrupts */
+
+class inter_processor_interrupt : public interrupt {
+public:
+    explicit inter_processor_interrupt(enum ipi_id, std::function<void ()>);
+    ~inter_processor_interrupt();
+
+    void send(sched::cpu* cpu);
+    void send_allbutself();
+};
 
 /* Private Periphereal Interrupts */
 

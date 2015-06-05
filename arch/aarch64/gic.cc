@@ -9,6 +9,8 @@
 #include <osv/debug.hh>
 #include <osv/mmio.hh>
 
+#include "processor.hh"
+
 #include "gic.hh"
 
 namespace gic {
@@ -131,6 +133,16 @@ void gic_driver::set_irq_type(unsigned int id, irq_type type)
     WITH_LOCK(gic_lock) {
         this->gicd.write_reg_grp(gicd_reg_irq2::GICD_ICFGR, id, (u32)type << 1);
     }
+}
+
+unsigned char gic_driver::get_cpu_target(int smp_idx)
+{
+    unsigned char mask;
+    assert(smp_idx < max_cpu_if);
+    WITH_LOCK(gic_lock) {
+        mask = this->cpu_targets[smp_idx];
+    }
+    return mask;
 }
 
 unsigned int gic_driver::ack_irq(void)

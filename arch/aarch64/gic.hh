@@ -140,6 +140,9 @@ public:
 
     void set_irq_type(unsigned int id, irq_type type); /* set level or edge */
 
+    /* returns the gic cpu mask target for the specific smp_idx */
+    unsigned char get_cpu_target(int smp_idx);
+
     /* send software-generated interrupt to other cpus; vector is [0..15] */
     void send_sgi(sgi_target_list_filter filter, unsigned char cpulist,
                   unsigned int vector); /* NIY */
