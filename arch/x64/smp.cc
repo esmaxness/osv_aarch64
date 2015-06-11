@@ -143,10 +143,3 @@ void smp_main()
     cpu->bringup_thread->_detached_state->_cpu = cpu;
     cpu->bringup_thread->switch_to_first();
 }
-
-void crash_other_processors()
-{
-    if (apic && smp_processors > 1) {
-        apic->nmi_allbutself();
-    }
-}

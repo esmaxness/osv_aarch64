@@ -10,14 +10,12 @@
 #include <smp.hh>
 #include <processor.hh>
 #include <arch.hh>
-
+#include <arch-power.hh>
 #include <sys/reboot.h>
 
-#ifndef AARCH64_PORT_STUB
-extern "C" {
-#include "acpi.h"
-}
-#endif /* !AARCH64_PORT_STUB */
+/*
+ * For the arch-specific parts see arch/$(ARCH)/arch-power.cc
+ */
 
 namespace osv {
 
@@ -28,10 +26,8 @@ namespace osv {
 
 void halt(void)
 {
-#ifndef AARCH64_PORT_STUB
-    crash_other_processors();
-#endif /* !AARCH64_PORT_STUB */
-
+    arch_halt();
+    // We shouldn't get here at all!
     while (true) {
         arch::halt_no_interrupts();
     }
@@ -39,20 +35,8 @@ void halt(void)
 
 void poweroff(void)
 {
-#ifndef AARCH64_PORT_STUB
-    ACPI_STATUS status = AcpiEnterSleepStatePrep(ACPI_STATE_S5);
-    if (ACPI_FAILURE(status)) {
-        debug("AcpiEnterSleepStatePrep failed: %s\n", AcpiFormatException(status));
-        halt();
-    }
-    status = AcpiEnterSleepState(ACPI_STATE_S5);
-    if (ACPI_FAILURE(status)) {
-        debug("AcpiEnterSleepState failed: %s\n", AcpiFormatException(status));
-        halt();
-    }
-#endif /* !AARCH64_PORT_STUB */
-
-    // We shouldn't get here on x86.
+    arch_poweroff();
+    // We shouldn't get here at all!
     halt();
 }
 
@@ -60,24 +44,7 @@ void poweroff(void)
 // some reason fails.
 void reboot(void)
 {
-#ifdef __x86_64__
-    // It would be nice if AcpiReset() worked, but it doesn't seem to work
-    // (on qemu & kvm), so let's resort to other techniques, which appear
-    // to work. Hopefully one of them will work on any hypervisor.
-    // Method 1: "fast reset" via System Control Port A (port 0x92)
-    processor::outb(1, 0x92);
-    // Method 2: Reset using the 8042 PS/2 Controller ("keyboard controller")
-    processor::outb(0xfe, 0x64);
-    // Method 3: Cause triple fault by loading a broken IDT and triggering an
-    // interrupt.
-    processor::lidt(processor::desc_ptr(0, 0));
-    __asm__ __volatile__("int3");
-    // If we're still here, none of the above methods worked...
-    debug("osv::reboot() did not work :(\n");
-#else /* !__x86_64__ */
-    // FIXME:
-    halt();
-#endif /* __x86_64__ */
+    arch_reboot();
 }
 
 
